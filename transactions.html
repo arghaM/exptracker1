@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transactions - Expense Tracker</title>
+<style>
+  :root {
+    --green-50: #f0fdf4; --green-100: #dcfce7; --green-500: #22c55e; --green-600: #16a34a; --green-700: #15803d;
+    --blue-50: #eff6ff; --blue-100: #dbeafe; --blue-500: #3b82f6; --blue-600: #2563eb; --blue-700: #1d4ed8;
+    --sidebar-bg: #ffffff; --sidebar-hover: #f8fafc; --sidebar-active: var(--blue-50);
+    --sidebar-text: #64748b; --sidebar-text-active: var(--blue-700); --sidebar-border: #e2e8f0;
+    --bg: #f8fafc; --card-bg: #ffffff; --card-border: #e2e8f0;
+    --text-primary: #1e293b; --text-secondary: #64748b; --text-muted: #94a3b8; --border: #e2e8f0;
+    --sidebar-width: 220px; --red-500: #ef4444; --red-50: #fef2f2;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text-primary); display: flex; min-height: 100vh; }
+
+  .sidebar { width: var(--sidebar-width); background: var(--sidebar-bg); border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; }
+  .sidebar-brand { padding: 20px 16px 28px; display: flex; align-items: center; gap: 10px; }
+  .sidebar-brand .logo { width: 30px; height: 30px; background: var(--blue-600); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; font-size: 14px; }
+  .sidebar-brand .name { color: var(--text-primary); font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+  .sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
+  .sidebar-link { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--sidebar-text); text-decoration: none; font-size: 13.5px; font-weight: 500; transition: all 0.15s; border: 1px solid transparent; }
+  .sidebar-link:hover { background: var(--sidebar-hover); color: var(--text-primary); }
+  .sidebar-link.active { background: var(--sidebar-active); color: var(--sidebar-text-active); font-weight: 600; border-color: var(--blue-100); }
+  .sidebar-link svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .sidebar-section { padding: 20px 12px 8px; font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; min-height: 100vh; display: flex; flex-direction: column; }
+  .topbar { background: var(--card-bg); border-bottom: 1px solid var(--card-border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+  .topbar h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .search-box { display: flex; align-items: center; gap: 6px; background: white; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; min-width: 200px; }
+  .search-box svg { width: 14px; height: 14px; color: var(--text-muted); flex-shrink: 0; }
+  .search-box input { border: none; outline: none; font-size: 13px; font-family: var(--font); color: var(--text-primary); width: 100%; background: none; }
+  .search-box input::placeholder { color: var(--text-muted); }
+  .month-nav { display: flex; align-items: center; gap: 4px; }
+  .month-nav button { background: none; border: 1px solid var(--border); color: var(--text-secondary); width: 28px; height: 28px; border-radius: 6px; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .month-nav button:hover { background: var(--bg); border-color: var(--text-muted); }
+  .month-nav span { font-size: 13px; font-weight: 500; min-width: 110px; text-align: center; }
+
+  /* Split layout */
+  .content-split { display: flex; flex: 1; overflow: hidden; }
+  .left-panel { flex: 0 0 60%; max-width: 60%; overflow-y: auto; border-right: 1px solid var(--border); }
+  .right-panel { flex: 1; overflow-y: auto; background: white; }
+
+  /* Transaction list */
+  .month-group { }
+  .month-header { display: flex; justify-content: space-between; align-items: baseline; padding: 20px 24px 8px; }
+  .month-header:first-child { padding-top: 12px; }
+  .month-name { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .month-total { font-size: 16px; font-weight: 700; }
+
+  .date-header { padding: 10px 24px 4px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+
+  .txn-row { display: flex; align-items: center; gap: 10px; padding: 10px 24px; cursor: pointer; transition: background 0.1s; border-left: 3px solid transparent; }
+  .txn-row:hover { background: #fafbfc; }
+  .txn-row.selected { background: var(--blue-50); border-left-color: var(--blue-600); }
+  .txn-item { font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .txn-account { font-size: 12px; color: var(--text-muted); margin-left: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .txn-left { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+  .cat-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; cursor: pointer; transition: opacity 0.15s; position: relative; }
+  .cat-badge:hover { opacity: 0.8; }
+  .cat-badge-arrow { font-size: 10px; margin-left: 2px; opacity: 0.6; }
+  .txn-amount { font-size: 14px; font-weight: 700; flex-shrink: 0; min-width: 70px; text-align: right; }
+  .txn-sep { border-bottom: 1px solid #f3f4f6; margin: 0 24px; }
+
+  /* Category picker dropdown */
+  .cat-picker { position: fixed; background: white; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.14); width: 220px; z-index: 200; display: none; overflow: hidden; }
+  .cat-picker.open { display: block; }
+  .cat-picker-search { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; }
+  .cat-picker-search input { width: 100%; padding: 6px 10px 6px 28px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: var(--font); background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='5' cy='5' r='4'/%3E%3Cpath d='M11 11l-3-3'/%3E%3C/svg%3E") 8px center no-repeat; }
+  .cat-picker-search input:focus { outline: none; border-color: var(--blue-500); }
+  .cat-picker-list { max-height: 200px; overflow-y: auto; padding: 4px; }
+  .cat-picker-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; transition: background 0.1s; }
+  .cat-picker-item:hover { background: #f8fafc; }
+  .cat-picker-item.active { background: var(--green-50); }
+  .cat-picker-item .cpi-icon { font-size: 15px; width: 20px; text-align: center; }
+  .cat-picker-footer { border-top: 1px solid #f3f4f6; padding: 4px; }
+  .cat-picker-footer .cat-picker-item { color: var(--text-muted); font-size: 12px; }
+
+  /* Detail panel */
+  .detail-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); gap: 12px; }
+  .detail-empty svg { width: 56px; height: 56px; opacity: 0.3; }
+  .detail-empty p { font-size: 14px; }
+
+  .detail-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #f3f4f6; }
+  .detail-header-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+  .detail-actions { display: flex; align-items: center; gap: 6px; }
+  .detail-actions button { background: none; border: none; cursor: pointer; padding: 5px 8px; border-radius: 6px; transition: all 0.15s; font-family: var(--font); }
+  .detail-actions button:hover { background: #f3f4f6; }
+  .btn-close-detail { color: var(--text-muted); font-size: 18px; }
+  .btn-edit { color: var(--blue-600); font-size: 13px; font-weight: 500; }
+  .btn-save { color: white; background: var(--blue-600) !important; font-size: 13px; font-weight: 500; border-radius: 6px !important; }
+  .btn-save:hover { background: var(--blue-700) !important; }
+  .btn-cancel-edit { color: var(--text-secondary); font-size: 13px; font-weight: 500; }
+
+  .detail-body { padding: 24px; }
+  .detail-date { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
+  .detail-title-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; }
+  .detail-item-name { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  .detail-amount { font-size: 22px; font-weight: 700; }
+
+  .detail-field { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #f3f4f6; }
+  .detail-field-label { font-size: 14px; color: var(--text-secondary); }
+  .detail-field-value { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; }
+  .detail-account-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green-500); flex-shrink: 0; }
+
+  .detail-notes { padding: 16px 0; }
+  .detail-notes-text { font-size: 13px; color: var(--text-primary); }
+  .detail-notes-placeholder { font-size: 13px; color: var(--text-muted); font-style: italic; }
+
+  /* Edit mode */
+  .edit-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: var(--font); }
+  .edit-input:focus { outline: none; border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .edit-select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: var(--font); background: white; }
+  .edit-select:focus { outline: none; border-color: var(--blue-500); }
+  .edit-field { margin-bottom: 12px; }
+  .edit-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Tag pills */
+  .tag-pill { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; line-height: 1.4; }
+  .tag-pill-remove { cursor: pointer; opacity: 0.5; font-size: 13px; line-height: 1; margin-left: 2px; }
+  .tag-pill-remove:hover { opacity: 1; }
+  .tag-pills-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .tag-pills-inline { display: inline-flex; gap: 3px; align-items: center; margin-left: 6px; flex-shrink: 1; overflow: hidden; }
+
+  /* Tag picker dropdown */
+  .tag-picker { position: fixed; background: white; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.14); width: 260px; z-index: 200; display: none; }
+  .tag-picker.open { display: block; }
+  .tag-picker-search { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; }
+  .tag-picker-search input { width: 100%; padding: 6px 10px 6px 28px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: var(--font); background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='5' cy='5' r='4'/%3E%3Cpath d='M11 11l-3-3'/%3E%3C/svg%3E") 8px center no-repeat; }
+  .tag-picker-search input:focus { outline: none; border-color: var(--blue-500); }
+  .tag-picker-list { max-height: 200px; overflow-y: auto; padding: 4px; }
+  .tag-picker-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; transition: background 0.1s; }
+  .tag-picker-item:hover { background: #f8fafc; }
+  .tag-picker-item .tpi-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .tag-picker-item .tpi-check { width: 16px; text-align: center; color: var(--green-600); font-size: 14px; flex-shrink: 0; }
+  .tag-picker-footer { border-top: 1px solid #f3f4f6; padding: 8px 10px; }
+  .tag-picker-create { display: flex; flex-direction: column; gap: 6px; }
+  .tag-picker-create input { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-family: var(--font); }
+  .tag-picker-create input:focus { outline: none; border-color: var(--blue-500); }
+  .tag-color-swatches { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tag-color-swatch { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: border-color 0.1s; }
+  .tag-color-swatch:hover, .tag-color-swatch.selected { border-color: var(--text-primary); }
+  .tag-create-btn { padding: 5px 12px; border: none; background: var(--blue-600); color: white; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: var(--font); align-self: flex-start; }
+  .tag-create-btn:hover { background: var(--blue-700); }
+  .tag-picker-new-trigger { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--text-muted); transition: background 0.1s; }
+  .tag-picker-new-trigger:hover { background: #f8fafc; }
+
+  .btn-add-tag { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; color: var(--text-muted); border: 1px dashed var(--border); cursor: pointer; background: none; font-family: var(--font); transition: all 0.15s; }
+  .btn-add-tag:hover { border-color: var(--blue-500); color: var(--blue-600); }
+
+  .empty-list { text-align: center; padding: 48px 24px; color: var(--text-muted); font-size: 14px; }
+
+  /* Recurring button */
+  .btn-recurring { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); font-size: 13px; font-weight: 500; }
+  .btn-recurring svg { width: 16px; height: 16px; }
+  .btn-recurring:hover { color: var(--blue-600); }
+
+  /* Recurring modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+  .modal-overlay.active { display: flex; }
+  .recur-modal { background: white; border-radius: 16px; padding: 28px; width: 400px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+  .recur-modal h3 { font-size: 18px; font-weight: 600; margin-bottom: 6px; letter-spacing: -0.3px; display: flex; align-items: center; justify-content: space-between; }
+  .recur-modal .modal-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; }
+  .recur-modal .modal-close { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 18px; padding: 4px; }
+  .recur-field { margin-bottom: 18px; }
+  .recur-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .recur-field select, .recur-field input[type="date"] { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-family: var(--font); background: white; }
+  .recur-field select:focus, .recur-field input:focus { outline: none; border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+
+  .recur-type-btns { display: flex; gap: 8px; }
+  .recur-type-btn { flex: 1; padding: 12px; border: 2px solid var(--border); border-radius: 12px; background: white; cursor: pointer; text-align: center; transition: all 0.15s; font-family: var(--font); }
+  .recur-type-btn:hover { border-color: var(--blue-500); background: var(--blue-50); }
+  .recur-type-btn.selected { border-color: var(--blue-600); background: var(--blue-50); }
+  .recur-type-btn .rt-icon { font-size: 20px; display: block; margin-bottom: 4px; }
+  .recur-type-btn .rt-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .recur-type-btn .rt-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  .freq-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .freq-btn { padding: 10px 8px; border: 1px solid var(--border); border-radius: 10px; background: white; cursor: pointer; font-size: 13px; font-weight: 500; text-align: center; font-family: var(--font); transition: all 0.15s; color: var(--text-primary); }
+  .freq-btn:hover { border-color: var(--blue-500); background: var(--blue-50); }
+  .freq-btn.selected { border-color: var(--blue-600); background: var(--blue-600); color: white; }
+
+  .recur-preview { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 18px; display: flex; align-items: center; gap: 12px; }
+  .recur-preview-icon { font-size: 22px; }
+  .recur-preview-info { flex: 1; }
+  .recur-preview-name { font-size: 14px; font-weight: 600; }
+  .recur-preview-detail { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+  .recur-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  .recur-btn-cancel { background: #f3f4f6; color: var(--text-secondary); border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 500; font-family: var(--font); }
+  .recur-btn-cancel:hover { background: #e5e7eb; }
+  .recur-btn-save { background: var(--blue-600); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; font-family: var(--font); display: flex; align-items: center; gap: 6px; }
+  .recur-btn-save:hover { background: var(--blue-700); }
+  .recur-btn-save svg { width: 16px; height: 16px; }
+
+  @media (max-width: 900px) {
+    .content-split { flex-direction: column; }
+    .left-panel { flex: none; max-width: 100%; border-right: none; max-height: 60vh; }
+    .right-panel { flex: none; min-height: 300px; }
+    .sidebar { display: none; }
+    .main { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-brand"><div class="logo">E</div><div class="name">ExpTracker</div></div>
+  <div class="sidebar-nav">
+    <a href="/" class="sidebar-link"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>Dashboard</a>
+    <a href="/transactions" class="sidebar-link active"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>Transactions</a>
+    <a href="/accounts-page" class="sidebar-link"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>Accounts</a>
+    <a href="/bills-page" class="sidebar-link"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>Bills</a>
+    <a href="/reports-page" class="sidebar-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Reports
+    </a>
+    <div class="sidebar-section">Manage</div>
+    <a href="/admin" class="sidebar-link"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>Categories</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <h2>Transactions</h2>
+    <div class="topbar-right">
+      <div class="search-box">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="searchInput" placeholder="Search" oninput="filterList()">
+      </div>
+      <div class="month-nav">
+        <button onclick="changeMonth(-1)">&#8592;</button>
+        <span id="monthLabel"></span>
+        <button onclick="changeMonth(1)">&#8594;</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content-split">
+    <div class="left-panel" id="leftPanel">
+      <div id="txnList"></div>
+      <div class="empty-list" id="emptyState" style="display:none;">No transactions found.</div>
+    </div>
+    <div class="right-panel">
+      <div class="detail-empty" id="detailEmpty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        <p>Select to view details</p>
+      </div>
+      <div id="detailContent" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Recurring Modal -->
+<div class="modal-overlay" id="recurModal" onclick="if(event.target===this)closeRecurModal()">
+  <div class="recur-modal">
+    <h3>
+      Make Recurring
+      <button class="modal-close" onclick="closeRecurModal()">&times;</button>
+    </h3>
+    <div class="modal-sub" id="recurModalSub"></div>
+
+    <div class="recur-preview" id="recurPreview"></div>
+
+    <div class="recur-field">
+      <label>Duration</label>
+      <div class="recur-type-btns">
+        <div class="recur-type-btn selected" id="btnPerpetual" onclick="setRecurType('perpetual')">
+          <span class="rt-icon">&#8734;</span>
+          <span class="rt-label">Perpetual</span>
+          <span class="rt-desc">No end date</span>
+        </div>
+        <div class="recur-type-btn" id="btnFixed" onclick="setRecurType('fixed')">
+          <span class="rt-icon">&#128197;</span>
+          <span class="rt-label">Fixed End</span>
+          <span class="rt-desc">Until a date</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="recur-field" id="endDateField" style="display:none">
+      <label>End Date</label>
+      <input type="date" id="recurEndDate">
+    </div>
+
+    <div class="recur-field">
+      <label>Frequency</label>
+      <div class="freq-grid" id="freqGrid"></div>
+    </div>
+
+    <div class="recur-actions">
+      <button class="recur-btn-cancel" onclick="closeRecurModal()">Cancel</button>
+      <button class="recur-btn-save" onclick="saveRecurring()">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        Create Bill
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const fmt = n => '\u20B9' + Number(n).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtShort = n => '\u20B9' + Number(n).toLocaleString('en-IN', {maximumFractionDigits:0});
+
+let CATEGORIES = [];
+let CAT_META = {};
+let ALL_TAGS = [];
+let allExpenses = [];
+let selectedId = null;
+let editMode = false;
+let editTagIds = [];
+let currentYear, currentMonth;
+
+const TAG_COLORS = ['#3b82f6','#ef4444','#22c55e','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#f97316','#14b8a6','#64748b','#a855f7','#84cc16'];
+
+const now = new Date();
+const todayStr = localDate(now);
+const yesterdayDate = new Date(now); yesterdayDate.setDate(now.getDate()-1);
+const yesterdayStr = localDate(yesterdayDate);
+
+function localDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function escH(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function catBadge(category, expenseId) {
+  const m = CAT_META[category] || {icon:'📋',color:'#94a3b8'};
+  const bg = m.color + '18';
+  const textColor = m.color;
+  const clickAttr = expenseId ? ` onclick="event.stopPropagation();openCatPicker(${expenseId},event)"` : '';
+  const arrow = expenseId ? '<span class="cat-badge-arrow">▾</span>' : '';
+  return `<span class="cat-badge" style="background:${bg};color:${textColor}"${clickAttr}>${m.icon} ${escH(category).toUpperCase()}${arrow}</span>`;
+}
+
+function tagPills(tags, compact) {
+  if (!tags || !tags.length) return '';
+  return tags.map(t => `<span class="tag-pill" style="background:${t.color}20;color:${t.color}">${escH(t.name)}</span>`).join('');
+}
+
+function relativeDate(dateStr) {
+  if (dateStr === todayStr) return 'Today';
+  if (dateStr === yesterdayStr) return 'Yesterday';
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${DAY_NAMES[d.getDay()]}, ${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
+}
+
+function fullDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${DAY_NAMES[d.getDay()]}, ${MONTH_SHORT[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+// --- Init ---
+async function init() {
+  const [catResp, metaResp, tagsResp] = await Promise.all([
+    fetch('/categories'), fetch('/categories/meta'), fetch('/tags')
+  ]);
+  CATEGORIES = (await catResp.json()).categories;
+  CAT_META = await metaResp.json();
+  ALL_TAGS = (await tagsResp.json()).tags;
+  currentYear = now.getFullYear();
+  currentMonth = now.getMonth() + 1;
+  updateMonthLabel();
+  loadTransactions();
+}
+
+function updateMonthLabel() {
+  document.getElementById('monthLabel').textContent = `${MONTH_FULL[currentMonth-1]} ${currentYear}`;
+}
+
+function changeMonth(delta) {
+  currentMonth += delta;
+  if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+  if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+  updateMonthLabel();
+  loadTransactions();
+}
+
+function getMonthRange() {
+  const start = `${currentYear}-${String(currentMonth).padStart(2,'0')}-01`;
+  const lastDay = new Date(currentYear, currentMonth, 0).getDate();
+  const end = `${currentYear}-${String(currentMonth).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  return {start, end};
+}
+
+async function loadTransactions() {
+  const {start, end} = getMonthRange();
+  const resp = await fetch(`/expenses?start=${start}&end=${end}&limit=500`);
+  const data = await resp.json();
+  allExpenses = data.expenses;
+  renderList();
+}
+
+function filterList() {
+  renderList();
+}
+
+function renderList() {
+  const q = (document.getElementById('searchInput').value || '').toLowerCase();
+  let filtered = allExpenses;
+  if (q) {
+    filtered = allExpenses.filter(e =>
+      e.item.toLowerCase().includes(q) ||
+      e.category.toLowerCase().includes(q) ||
+      (e.account||'').toLowerCase().includes(q) ||
+      (e.notes||'').toLowerCase().includes(q) ||
+      (e.tags||[]).some(t => t.name.toLowerCase().includes(q))
+    );
+  }
+
+  const container = document.getElementById('txnList');
+  const emptyEl = document.getElementById('emptyState');
+
+  if (!filtered.length) {
+    container.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  // Group by month, then by date
+  const months = new Map();
+  for (const e of filtered) {
+    const mk = e.date.substring(0,7);
+    if (!months.has(mk)) months.set(mk, {expenses:[], total:0});
+    const m = months.get(mk);
+    m.expenses.push(e);
+    m.total += e.amount;
+  }
+
+  let html = '';
+  for (const [mk, mg] of months) {
+    const [y,m] = mk.split('-');
+    const monthName = `${MONTH_FULL[parseInt(m)-1]} ${y}`;
+    html += `<div class="month-group">
+      <div class="month-header">
+        <span class="month-name">${monthName}</span>
+        <span class="month-total">${fmtShort(mg.total)}</span>
+      </div>`;
+
+    // Group by date within month
+    const dates = new Map();
+    for (const e of mg.expenses) {
+      if (!dates.has(e.date)) dates.set(e.date, []);
+      dates.get(e.date).push(e);
+    }
+
+    for (const [dateStr, txns] of dates) {
+      html += `<div class="date-header">${relativeDate(dateStr)}</div>`;
+      for (const e of txns) {
+        const acctDisplay = e.account ? escH(e.account) : 'Manual account';
+        const sel = selectedId === e.id ? ' selected' : '';
+        const tagsHtml = (e.tags && e.tags.length) ? `<span class="tag-pills-inline">${tagPills(e.tags, true)}</span>` : '';
+        html += `<div class="txn-row${sel}" data-id="${e.id}" onclick="selectTxn(${e.id})">
+          <div class="txn-left">
+            <span class="txn-item">${escH(e.item)}</span>
+            <span class="txn-account">${acctDisplay}</span>
+          </div>
+          ${catBadge(e.category, e.id)}${tagsHtml}
+          <span class="txn-amount">${fmtShort(e.amount)}</span>
+        </div>`;
+      }
+    }
+    html += '</div>';
+  }
+  container.innerHTML = html;
+}
+
+// --- Detail Panel ---
+function selectTxn(id) {
+  selectedId = id;
+  editMode = false;
+  // Highlight
+  document.querySelectorAll('.txn-row').forEach(r => r.classList.remove('selected'));
+  const row = document.querySelector(`.txn-row[data-id="${id}"]`);
+  if (row) row.classList.add('selected');
+
+  const e = allExpenses.find(x => x.id === id);
+  if (!e) return;
+
+  document.getElementById('detailEmpty').style.display = 'none';
+  const panel = document.getElementById('detailContent');
+  panel.style.display = 'block';
+  renderDetailView(e);
+}
+
+function renderDetailView(e) {
+  const panel = document.getElementById('detailContent');
+  const acctDisplay = e.account || 'Manual account';
+  const meta = CAT_META[e.category] || {icon:'📋',color:'#94a3b8'};
+  panel.innerHTML = `
+    <div class="detail-header">
+      <span class="detail-header-title">Transaction</span>
+      <div class="detail-actions">
+        <button class="btn-recurring" onclick="openRecurModal()" title="Make recurring bill">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+        <button class="btn-edit" onclick="startEdit()">Edit</button>
+        <button class="btn-close-detail" onclick="closeDetail()">&times;</button>
+      </div>
+    </div>
+    <div class="detail-body">
+      <div class="detail-date">${fullDate(e.date)}</div>
+      <div class="detail-title-row">
+        <span class="detail-item-name">${escH(e.item)}</span>
+        <span class="detail-amount">${fmt(e.amount)}</span>
+      </div>
+      <div class="detail-field">
+        <span class="detail-field-label">Account</span>
+        <span class="detail-field-value"><span class="detail-account-dot"></span>${escH(acctDisplay)}</span>
+      </div>
+      <div class="detail-field">
+        <span class="detail-field-label">Category</span>
+        <span class="detail-field-value">${catBadge(e.category, e.id)}</span>
+      </div>
+      <div class="detail-field">
+        <span class="detail-field-label">Person</span>
+        <span class="detail-field-value">${escH(e.person || '-')}</span>
+      </div>
+      <div class="detail-field">
+        <span class="detail-field-label">Tags</span>
+        <span class="detail-field-value">${(e.tags && e.tags.length) ? `<span class="tag-pills-row">${tagPills(e.tags)}</span>` : '<span style="color:var(--text-muted)">No tags</span>'}</span>
+      </div>
+      <div class="detail-notes">
+        ${e.notes ? `<div class="detail-notes-text">${escH(e.notes)}</div>` : `<div class="detail-notes-placeholder">No notes</div>`}
+      </div>
+    </div>`;
+}
+
+function startEdit() {
+  editMode = true;
+  const e = allExpenses.find(x => x.id === selectedId);
+  if (!e) return;
+  editTagIds = (e.tags || []).map(t => t.id);
+  const panel = document.getElementById('detailContent');
+  const catOptions = CATEGORIES.map(c => `<option value="${escH(c)}"${c===e.category?' selected':''}>${escH(c)}</option>`).join('');
+  panel.innerHTML = `
+    <div class="detail-header">
+      <span class="detail-header-title">Edit Transaction</span>
+      <div class="detail-actions">
+        <button class="btn-cancel-edit" onclick="selectTxn(${e.id})">Cancel</button>
+        <button class="btn-save" onclick="saveEdit()">Save</button>
+      </div>
+    </div>
+    <div class="detail-body">
+      <div class="edit-field">
+        <label>Date</label>
+        <input type="date" class="edit-input" id="editDate" value="${e.date}">
+      </div>
+      <div class="edit-field">
+        <label>Item</label>
+        <input type="text" class="edit-input" id="editItem" value="${escH(e.item)}">
+      </div>
+      <div class="edit-field">
+        <label>Amount</label>
+        <input type="number" class="edit-input" id="editAmount" value="${e.amount}" step="0.01">
+      </div>
+      <div class="edit-field">
+        <label>Category</label>
+        <select class="edit-select" id="editCategory" style="width:100%">${catOptions}</select>
+      </div>
+      <div class="edit-field">
+        <label>Account</label>
+        <input type="text" class="edit-input" id="editAccount" value="${escH(e.account||'')}">
+      </div>
+      <div class="edit-field">
+        <label>Notes</label>
+        <input type="text" class="edit-input" id="editNotes" value="${escH(e.notes||'')}" placeholder="Add a note...">
+      </div>
+      <div class="edit-field">
+        <label>Tags</label>
+        <div id="editTagsContainer" class="tag-pills-row"></div>
+      </div>
+      <div style="margin-top:8px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer;">
+          <input type="checkbox" id="editOverride"> Apply category as override for this item
+        </label>
+      </div>
+    </div>`;
+  renderEditTags();
+}
+
+function renderEditTags() {
+  const container = document.getElementById('editTagsContainer');
+  if (!container) return;
+  let html = '';
+  for (const tid of editTagIds) {
+    const tag = ALL_TAGS.find(t => t.id === tid);
+    if (!tag) continue;
+    html += `<span class="tag-pill" style="background:${tag.color}20;color:${tag.color}">${escH(tag.name)}<span class="tag-pill-remove" onclick="removeEditTag(${tag.id})">&times;</span></span>`;
+  }
+  html += `<button class="btn-add-tag" onclick="openTagPicker(event)">+ Add tag</button>`;
+  container.innerHTML = html;
+}
+
+function removeEditTag(tagId) {
+  editTagIds = editTagIds.filter(id => id !== tagId);
+  renderEditTags();
+}
+
+async function saveEdit() {
+  const e = allExpenses.find(x => x.id === selectedId);
+  const date = document.getElementById('editDate').value;
+  const item = document.getElementById('editItem').value.trim();
+  const amount = parseFloat(document.getElementById('editAmount').value);
+  const category = document.getElementById('editCategory').value;
+  const account = document.getElementById('editAccount').value.trim();
+  const notes = document.getElementById('editNotes').value.trim();
+  const applyOverride = document.getElementById('editOverride').checked;
+
+  if (!item || isNaN(amount)) return;
+
+  const resp = await fetch(`/expenses/${selectedId}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({date, item, amount, category, notes, account, apply_override: applyOverride, tag_ids: editTagIds})
+  });
+  if (resp.ok) {
+    // Reload
+    await loadTransactions();
+    selectTxn(selectedId);
+  }
+}
+
+function closeDetail() {
+  selectedId = null;
+  editMode = false;
+  document.getElementById('detailContent').style.display = 'none';
+  document.getElementById('detailEmpty').style.display = 'flex';
+  document.querySelectorAll('.txn-row').forEach(r => r.classList.remove('selected'));
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeCatPicker(); closeTagPicker(); closeDetail(); }
+});
+
+// --- Category Picker ---
+let pickerExpenseId = null;
+
+function buildCatPickerHTML() {
+  const div = document.createElement('div');
+  div.className = 'cat-picker';
+  div.id = 'catPicker';
+  div.innerHTML = `
+    <div class="cat-picker-search">
+      <input type="text" placeholder="Search categories..." oninput="filterCatPicker(this.value)">
+    </div>
+    <div class="cat-picker-list" id="catPickerList"></div>`;
+  document.body.appendChild(div);
+
+  // Close on outside click
+  document.addEventListener('click', e => {
+    const picker = document.getElementById('catPicker');
+    if (picker && picker.classList.contains('open') && !picker.contains(e.target) && !e.target.closest('.cat-badge')) {
+      closeCatPicker();
+    }
+  });
+}
+
+function openCatPicker(expenseId, evt) {
+  evt.stopPropagation();
+  const picker = document.getElementById('catPicker');
+  const expense = allExpenses.find(x => x.id === expenseId);
+  if (!expense) return;
+  pickerExpenseId = expenseId;
+
+  // Position near the clicked badge
+  const rect = evt.currentTarget.getBoundingClientRect();
+  let top = rect.bottom + 4;
+  let left = rect.left;
+  // Keep in viewport
+  if (top + 260 > window.innerHeight) top = rect.top - 260;
+  if (left + 220 > window.innerWidth) left = window.innerWidth - 230;
+
+  picker.style.top = top + 'px';
+  picker.style.left = left + 'px';
+
+  renderCatPickerItems('', expense.category);
+  picker.classList.add('open');
+  picker.querySelector('input').value = '';
+  picker.querySelector('input').focus();
+}
+
+function renderCatPickerItems(query, currentCat) {
+  const list = document.getElementById('catPickerList');
+  const q = query.toLowerCase();
+  const cats = CATEGORIES.filter(c => !q || c.toLowerCase().includes(q));
+  list.innerHTML = cats.map(c => {
+    const m = CAT_META[c] || {icon:'📋', color:'#94a3b8'};
+    const active = c === currentCat ? ' active' : '';
+    return `<div class="cat-picker-item${active}" onclick="pickCategory('${escH(c).replace(/'/g,"\\'")}')">
+      <span class="cpi-icon">${m.icon}</span><span>${escH(c)}</span>
+    </div>`;
+  }).join('');
+}
+
+function filterCatPicker(q) {
+  const expense = allExpenses.find(x => x.id === pickerExpenseId);
+  renderCatPickerItems(q, expense ? expense.category : '');
+}
+
+async function pickCategory(newCategory) {
+  closeCatPicker();
+  const expense = allExpenses.find(x => x.id === pickerExpenseId);
+  if (!expense || expense.category === newCategory) return;
+
+  const resp = await fetch(`/expenses/${pickerExpenseId}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      date: expense.date,
+      item: expense.item,
+      amount: expense.amount,
+      category: newCategory,
+      notes: expense.notes || '',
+      account: expense.account || ''
+    })
+  });
+  if (resp.ok) {
+    expense.category = newCategory;
+    renderList();
+    if (selectedId === pickerExpenseId) renderDetailView(expense);
+  }
+}
+
+function closeCatPicker() {
+  const picker = document.getElementById('catPicker');
+  if (picker) picker.classList.remove('open');
+  pickerExpenseId = null;
+}
+
+buildCatPickerHTML();
+
+// --- Tag Picker ---
+let tagPickerCreateMode = false;
+let tagPickerNewColor = TAG_COLORS[0];
+
+function buildTagPickerHTML() {
+  const div = document.createElement('div');
+  div.className = 'tag-picker';
+  div.id = 'tagPicker';
+  div.innerHTML = `
+    <div class="tag-picker-search">
+      <input type="text" placeholder="Search tags..." oninput="filterTagPicker(this.value)">
+    </div>
+    <div class="tag-picker-list" id="tagPickerList"></div>
+    <div class="tag-picker-footer" id="tagPickerFooter"></div>`;
+  document.body.appendChild(div);
+
+  document.addEventListener('click', e => {
+    const picker = document.getElementById('tagPicker');
+    if (picker && picker.classList.contains('open') && !picker.contains(e.target) && !e.target.closest('.btn-add-tag')) {
+      closeTagPicker();
+    }
+  });
+}
+
+function openTagPicker(evt) {
+  evt.stopPropagation();
+  const picker = document.getElementById('tagPicker');
+  tagPickerCreateMode = false;
+
+  const rect = evt.currentTarget.getBoundingClientRect();
+  let top = rect.bottom + 4;
+  let left = rect.left;
+  if (top + 300 > window.innerHeight) top = rect.top - 300;
+  if (left + 260 > window.innerWidth) left = window.innerWidth - 270;
+
+  picker.style.top = top + 'px';
+  picker.style.left = left + 'px';
+  renderTagPickerItems('');
+  renderTagPickerFooter();
+  picker.classList.add('open');
+  picker.querySelector('input').value = '';
+  picker.querySelector('input').focus();
+}
+
+function renderTagPickerItems(query) {
+  const list = document.getElementById('tagPickerList');
+  const q = query.toLowerCase();
+  const tags = ALL_TAGS.filter(t => !q || t.name.toLowerCase().includes(q));
+  list.innerHTML = tags.map(t => {
+    const checked = editTagIds.includes(t.id);
+    return `<div class="tag-picker-item" onclick="toggleEditTag(${t.id})">
+      <span class="tpi-check">${checked ? '✓' : ''}</span>
+      <span class="tpi-dot" style="background:${t.color}"></span>
+      <span>${escH(t.name)}</span>
+    </div>`;
+  }).join('');
+  if (!tags.length && q) {
+    list.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text-muted);font-size:12px;">No tags found</div>';
+  }
+}
+
+function renderTagPickerFooter() {
+  const footer = document.getElementById('tagPickerFooter');
+  if (tagPickerCreateMode) {
+    const swatches = TAG_COLORS.map(c =>
+      `<div class="tag-color-swatch${c===tagPickerNewColor?' selected':''}" style="background:${c}" onclick="event.stopPropagation();selectNewTagColor('${c}')"></div>`
+    ).join('');
+    footer.innerHTML = `<div class="tag-picker-create" onclick="event.stopPropagation()">
+      <input type="text" id="newTagName" placeholder="Tag name..." onkeydown="if(event.key==='Enter')createNewTag()">
+      <div class="tag-color-swatches">${swatches}</div>
+      <div style="display:flex;gap:6px;">
+        <button class="tag-create-btn" onclick="createNewTag()">Create</button>
+        <button class="tag-create-btn" style="background:var(--text-muted)" onclick="tagPickerCreateMode=false;renderTagPickerFooter()">Cancel</button>
+      </div>
+    </div>`;
+    setTimeout(() => { const el = document.getElementById('newTagName'); if(el) el.focus(); }, 50);
+  } else {
+    footer.innerHTML = `<div class="tag-picker-new-trigger" onclick="event.stopPropagation();tagPickerCreateMode=true;renderTagPickerFooter()">+ Create new tag</div>`;
+  }
+}
+
+function selectNewTagColor(color) {
+  tagPickerNewColor = color;
+  renderTagPickerFooter();
+}
+
+async function createNewTag() {
+  const nameEl = document.getElementById('newTagName');
+  const name = nameEl.value.trim();
+  if (!name) return;
+  const resp = await fetch('/tags', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({name, color: tagPickerNewColor})
+  });
+  const data = await resp.json();
+  if (data.tag) {
+    ALL_TAGS.push(data.tag);
+    editTagIds.push(data.tag.id);
+    tagPickerCreateMode = false;
+    renderTagPickerItems('');
+    renderTagPickerFooter();
+    renderEditTags();
+  }
+}
+
+function toggleEditTag(tagId) {
+  if (editTagIds.includes(tagId)) {
+    editTagIds = editTagIds.filter(id => id !== tagId);
+  } else {
+    editTagIds.push(tagId);
+  }
+  renderTagPickerItems(document.querySelector('#tagPicker .tag-picker-search input').value);
+  renderEditTags();
+}
+
+function filterTagPicker(q) {
+  renderTagPickerItems(q);
+}
+
+function closeTagPicker() {
+  const picker = document.getElementById('tagPicker');
+  if (picker) picker.classList.remove('open');
+  tagPickerCreateMode = false;
+}
+
+buildTagPickerHTML();
+
+// --- Recurring Modal ---
+const FREQ_OPTIONS = [
+  {value: 'weekly', label: '1 Week'},
+  {value: 'biweekly', label: '2 Weeks'},
+  {value: 'monthly', label: '1 Month'},
+  {value: 'half-yearly', label: '6 Months'},
+  {value: 'yearly', label: '1 Year'},
+  {value: 'once_in_2_years', label: '2 Years'},
+  {value: 'once_in_3_years', label: '3 Years'},
+  {value: 'once_in_4_years', label: '4 Years'},
+  {value: 'once_in_5_years', label: '5 Years'},
+];
+let recurType = 'perpetual';
+let recurFreq = 'monthly';
+
+function initFreqGrid() {
+  const grid = document.getElementById('freqGrid');
+  grid.innerHTML = FREQ_OPTIONS.map(f =>
+    `<div class="freq-btn${f.value === recurFreq ? ' selected' : ''}" onclick="pickFreq('${f.value}')">${f.label}</div>`
+  ).join('');
+}
+
+function pickFreq(val) {
+  recurFreq = val;
+  initFreqGrid();
+}
+
+function setRecurType(type) {
+  recurType = type;
+  document.getElementById('btnPerpetual').classList.toggle('selected', type === 'perpetual');
+  document.getElementById('btnFixed').classList.toggle('selected', type === 'fixed');
+  document.getElementById('endDateField').style.display = type === 'fixed' ? 'block' : 'none';
+}
+
+function openRecurModal() {
+  const e = allExpenses.find(x => x.id === selectedId);
+  if (!e) return;
+
+  recurType = 'perpetual';
+  recurFreq = 'monthly';
+
+  const meta = CAT_META[e.category] || {icon: '\uD83D\uDCCB', color: '#94a3b8'};
+  document.getElementById('recurModalSub').textContent = 'Create a recurring bill from this transaction';
+  document.getElementById('recurPreview').innerHTML = `
+    <span class="recur-preview-icon">${meta.icon}</span>
+    <div class="recur-preview-info">
+      <div class="recur-preview-name">${escH(e.item)}</div>
+      <div class="recur-preview-detail">${fmt(e.amount)} \u2022 ${escH(e.category)}</div>
+    </div>`;
+
+  setRecurType('perpetual');
+  initFreqGrid();
+
+  // Default end date to 1 year from now
+  const nextYear = new Date();
+  nextYear.setFullYear(nextYear.getFullYear() + 1);
+  document.getElementById('recurEndDate').value = localDate(nextYear);
+
+  document.getElementById('recurModal').classList.add('active');
+}
+
+function closeRecurModal() {
+  document.getElementById('recurModal').classList.remove('active');
+}
+
+async function saveRecurring() {
+  const e = allExpenses.find(x => x.id === selectedId);
+  if (!e) return;
+
+  const endDate = recurType === 'fixed' ? document.getElementById('recurEndDate').value : null;
+  if (recurType === 'fixed' && !endDate) {
+    alert('Please select an end date.');
+    return;
+  }
+
+  const body = {
+    name: e.item,
+    amount: e.amount,
+    category: e.category,
+    frequency: recurFreq,
+    anchor_date: e.date,
+    alert_days: 15,
+    notes: 'Created from transaction #' + e.id,
+    end_date: endDate,
+  };
+
+  const resp = await fetch('/bills', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+
+  closeRecurModal();
+
+  if (data.status === 'created') {
+    if (confirm('Bill created successfully! Go to Bills page?')) {
+      window.location.href = '/bills-page';
+    }
+  } else {
+    alert('Error creating bill: ' + (data.error || 'Unknown error'));
+  }
+}
+
+init();
+</script>
+</body>
+</html>

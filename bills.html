@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bills - Expense Tracker</title>
+<style>
+  :root {
+    --green-50: #f0fdf4;
+    --green-100: #dcfce7;
+    --green-500: #22c55e;
+    --green-600: #16a34a;
+    --green-700: #15803d;
+    --blue-50: #eff6ff;
+    --blue-100: #dbeafe;
+    --blue-500: #3b82f6;
+    --blue-600: #2563eb;
+    --blue-700: #1d4ed8;
+    --sidebar-bg: #ffffff;
+    --sidebar-hover: #f8fafc;
+    --sidebar-active: var(--blue-50);
+    --sidebar-text: #64748b;
+    --sidebar-text-active: var(--blue-700);
+    --sidebar-border: #e2e8f0;
+    --bg: #f8fafc;
+    --card-bg: #ffffff;
+    --card-border: #e2e8f0;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --text-muted: #94a3b8;
+    --border: #e2e8f0;
+    --sidebar-width: 220px;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --red-500: #ef4444;
+    --red-50: #fef2f2;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text-primary); display: flex; min-height: 100vh; }
+
+  .sidebar { width: var(--sidebar-width); background: var(--sidebar-bg); border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; }
+  .sidebar-brand { padding: 20px 16px 28px; display: flex; align-items: center; gap: 10px; }
+  .sidebar-brand .logo { width: 30px; height: 30px; background: var(--blue-600); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; font-size: 14px; }
+  .sidebar-brand .name { color: var(--text-primary); font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+  .sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
+  .sidebar-link { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--sidebar-text); text-decoration: none; font-size: 13.5px; font-weight: 500; transition: all 0.15s; border: 1px solid transparent; }
+  .sidebar-link:hover { background: var(--sidebar-hover); color: var(--text-primary); }
+  .sidebar-link.active { background: var(--sidebar-active); color: var(--sidebar-text-active); font-weight: 600; border-color: var(--blue-100); }
+  .sidebar-link svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .sidebar-section { padding: 20px 12px 8px; font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; min-height: 100vh; }
+  .topbar { background: var(--card-bg); border-bottom: 1px solid var(--card-border); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; }
+  .topbar h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+  .content { padding: 24px 32px; }
+
+  .btn { border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; font-family: var(--font); transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--green-600); color: white; }
+  .btn-primary:hover { background: var(--green-700); }
+  .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 6px; }
+  .btn-ghost { background: none; border: none; color: var(--text-secondary); }
+  .btn-ghost:hover { background: #f3f4f6; color: var(--text-primary); }
+  .btn-danger-ghost { background: none; border: none; color: var(--text-muted); cursor: pointer; }
+  .btn-danger-ghost:hover { background: var(--red-50); color: var(--red-500); }
+
+  .bills-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+  .bill-card { background: var(--card-bg); border-radius: 12px; border: 1px solid var(--card-border); padding: 20px; transition: box-shadow 0.15s; }
+  .bill-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+  .bill-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .bill-card-name { font-size: 15px; font-weight: 600; }
+  .bill-card-amount { font-size: 18px; font-weight: 700; color: var(--green-600); }
+  .bill-card-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .bill-meta-tag { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 12px; background: #f3f4f6; color: var(--text-secondary); }
+  .bill-meta-tag.freq { background: #eff6ff; color: #2563eb; }
+  .bill-meta-tag.due { background: #fef3c7; color: #92400e; }
+  .bill-card-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; padding-top: 12px; border-top: 1px solid #f3f4f6; }
+  .bill-notes { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+  .bill-meta-tag.perpetual { background: #f0fdf4; color: #15803d; }
+  .bill-meta-tag.end-date { background: #faf5ff; color: #7c3aed; }
+  .bill-meta-tag.expired { background: #fef2f2; color: #dc2626; font-weight: 600; }
+  .bill-card.expired { opacity: 0.6; }
+
+  /* View toggle */
+  .view-toggle { display: flex; background: #f3f4f6; border-radius: 8px; padding: 3px; gap: 2px; }
+  .view-toggle-btn { padding: 6px 14px; border: none; border-radius: 6px; font-size: 12px; font-weight: 500; font-family: var(--font); cursor: pointer; background: transparent; color: var(--text-secondary); transition: all 0.15s; display: flex; align-items: center; gap: 5px; }
+  .view-toggle-btn.active { background: white; color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .view-toggle-btn svg { width: 14px; height: 14px; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+
+  /* Heatmap grid */
+  .heatmap-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .heatmap-cell { background: var(--card-bg); border-radius: 12px; border: 1px solid var(--card-border); padding: 18px; cursor: pointer; transition: all 0.15s; position: relative; overflow: hidden; }
+  .heatmap-cell:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); transform: translateY(-1px); }
+  .heatmap-cell-month { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+  .heatmap-cell-year { font-size: 11px; color: var(--text-muted); font-weight: 400; }
+  .heatmap-cell-stats { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 10px; }
+  .heatmap-cell-count { font-size: 22px; font-weight: 700; line-height: 1; }
+  .heatmap-cell-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
+  .heatmap-cell-amount { font-size: 13px; font-weight: 600; text-align: right; }
+  .heatmap-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 4px; border-radius: 0 0 12px 12px; }
+  .heatmap-cell.current-month { border: 2px solid var(--green-600); background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important; position: relative; }
+  .heatmap-cell.current-month::before { content: 'NOW'; position: absolute; top: 8px; right: 10px; font-size: 9px; font-weight: 700; letter-spacing: 1px; color: white; background: var(--green-600); padding: 2px 6px; border-radius: 4px; line-height: 1; }
+  .heatmap-cell.current-month .heatmap-cell-month { color: var(--green-700) !important; }
+  .heatmap-cell.current-month .heatmap-cell-count { color: var(--green-700) !important; }
+  .heatmap-cell.current-month .heatmap-cell-label { color: var(--green-600) !important; opacity: 1 !important; }
+  .heatmap-cell.current-month .heatmap-cell-amount { color: var(--green-700) !important; }
+  .heatmap-cell.current-month .heatmap-bar { background: var(--green-500) !important; opacity: 1 !important; height: 5px; }
+  .heatmap-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .heatmap-year-title { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+  .heatmap-year-total { font-size: 14px; color: var(--text-secondary); }
+  .heatmap-year-total strong { font-size: 18px; font-weight: 700; color: var(--green-600); }
+
+  /* Month calendar modal */
+  .cal-modal { background: white; border-radius: 16px; width: 560px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,0.15); overflow: visible; }
+  .cal-modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .cal-modal-header h3 { font-size: 17px; font-weight: 600; }
+  .cal-modal-close { background: none; border: none; font-size: 18px; color: var(--text-muted); cursor: pointer; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .cal-modal-close:hover { background: #f3f4f6; color: var(--text-primary); }
+  .cal-modal-body { padding: 20px 24px; overflow: visible; }
+  .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 6px; }
+  .cal-weekday { text-align: center; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; padding: 4px 0; }
+  .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; overflow: visible; }
+  .cal-day { aspect-ratio: 1; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; position: relative; cursor: default; transition: all 0.1s; }
+  .cal-day.empty { background: transparent; }
+  .cal-day.has-bills { background: #eff6ff; color: #1d4ed8; cursor: pointer; font-weight: 600; }
+  .cal-day.has-bills:hover { background: #dbeafe; }
+  .cal-day.is-end-date { background: #fef3c7; color: #92400e; border: 2px solid #f59e0b; }
+  .cal-day.is-end-date.has-bills { background: #fef3c7; color: #92400e; }
+  .cal-day.has-expired { background: #fef2f2; color: #dc2626; }
+  .cal-day.today { box-shadow: inset 0 0 0 2px var(--green-500); }
+  .cal-day-num { font-size: 13px; }
+  .cal-day-dot { width: 5px; height: 5px; border-radius: 50%; background: #3b82f6; margin-top: 2px; }
+  .cal-day.is-end-date .cal-day-dot { background: #f59e0b; }
+  .cal-day.has-expired .cal-day-dot { background: #ef4444; }
+
+  /* Day detail tooltip */
+  .cal-day { position: relative; }
+  .cal-day-detail { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #1e293b; color: white; border-radius: 10px; padding: 10px 14px; min-width: 200px; max-width: 260px; width: max-content; z-index: 20; box-shadow: 0 8px 24px rgba(0,0,0,0.2); pointer-events: none; }
+  .cal-day-detail::after { content:''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: #1e293b; }
+  /* Keep tooltip within modal for edge cells */
+  .cal-day:nth-child(7n) .cal-day-detail,
+  .cal-day:nth-child(7n-1) .cal-day-detail { left: auto; right: 0; transform: none; }
+  .cal-day:nth-child(7n) .cal-day-detail::after,
+  .cal-day:nth-child(7n-1) .cal-day-detail::after { left: auto; right: 12px; transform: none; }
+  .cal-day:nth-child(7n-6) .cal-day-detail,
+  .cal-day:nth-child(7n-5) .cal-day-detail { left: 0; right: auto; transform: none; }
+  .cal-day:nth-child(7n-6) .cal-day-detail::after,
+  .cal-day:nth-child(7n-5) .cal-day-detail::after { left: 12px; right: auto; transform: none; }
+  .cal-day-detail-item { font-size: 11px; padding: 3px 0; display: flex; justify-content: space-between; gap: 12px; white-space: nowrap; }
+  .cal-day-detail-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+  .cal-day-detail-amount { font-weight: 600; color: var(--green-500); flex-shrink: 0; }
+  .cal-day-detail-end { font-size: 10px; color: #fbbf24; font-weight: 500; }
+  /* First row: show tooltip below instead of above */
+  .cal-day.first-row .cal-day-detail { bottom: auto; top: calc(100% + 8px); }
+  .cal-day.first-row .cal-day-detail::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: #1e293b; }
+
+  .cal-summary { display: flex; gap: 16px; padding: 14px 0 0; border-top: 1px solid var(--border); margin-top: 16px; }
+  .cal-summary-item { font-size: 12px; color: var(--text-secondary); }
+  .cal-summary-item strong { color: var(--text-primary); }
+  .cal-legend { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .cal-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); }
+  .cal-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+  @media (max-width: 768px) {
+    .heatmap-grid { grid-template-columns: repeat(2, 1fr); }
+    .cal-modal { width: 100%; }
+  }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .checkbox-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--green-600); cursor: pointer; }
+  .checkbox-row label { font-size: 13px; font-weight: 500; color: var(--text-primary); cursor: pointer; }
+
+  /* History section */
+  .bill-history-toggle { font-size: 12px; color: var(--green-600); cursor: pointer; background: none; border: none; font-weight: 500; font-family: var(--font); }
+  .bill-history-toggle:hover { text-decoration: underline; }
+  .bill-history { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f3f4f6; }
+  .bill-history.open { display: block; }
+  .bill-history-item { font-size: 12px; color: var(--text-secondary); padding: 4px 0; display: flex; justify-content: space-between; }
+
+  .empty-state { text-align: center; padding: 48px; color: var(--text-muted); font-size: 14px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--card-border); }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+  .modal-overlay.active { display: flex; }
+  .modal { background: white; border-radius: 16px; padding: 28px; width: 460px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+  .modal h3 { font-size: 18px; font-weight: 600; margin-bottom: 20px; letter-spacing: -0.3px; }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 9px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-family: var(--font); transition: border-color 0.15s; background: white; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px rgba(34,197,94,0.1); }
+  .form-group textarea { resize: vertical; min-height: 60px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  .btn-cancel { background: #f3f4f6; color: var(--text-secondary); border: none; padding: 9px 18px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 500; font-family: var(--font); }
+  .btn-cancel:hover { background: #e5e7eb; }
+  .btn-confirm { background: var(--green-600); color: white; border: none; padding: 9px 18px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 500; font-family: var(--font); }
+  .btn-confirm:hover { background: var(--green-700); }
+
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .main { margin-left: 0; }
+    .content { padding: 16px; }
+    .topbar { padding: 12px 16px; }
+    .bills-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <div class="logo">E</div>
+    <div class="name">ExpTracker</div>
+  </div>
+  <div class="sidebar-nav">
+    <a href="/" class="sidebar-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
+      Dashboard
+    </a>
+    <a href="/transactions" class="sidebar-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+      Transactions
+    </a>
+    <a href="/accounts-page" class="sidebar-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+      Accounts
+    </a>
+    <a href="/bills-page" class="sidebar-link active">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      Bills
+    </a>
+    <a href="/reports-page" class="sidebar-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Reports
+    </a>
+    <div class="sidebar-section">Manage</div>
+    <a href="/admin" class="sidebar-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>
+      Categories
+    </a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <h2>Bills & Recurring Expenses</h2>
+    <div class="topbar-right">
+      <div class="view-toggle">
+        <button class="view-toggle-btn active" id="viewCards" onclick="switchView('cards')">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+          Cards
+        </button>
+        <button class="view-toggle-btn" id="viewCalendar" onclick="switchView('calendar')">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          Calendar
+        </button>
+      </div>
+      <button class="btn btn-primary" onclick="showAddModal()">
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" d="M12 5v14m-7-7h14"/></svg>
+        Add Bill
+      </button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="cardsView">
+      <div class="bills-grid" id="billsGrid"></div>
+      <div class="empty-state" id="emptyState" style="display:none;">
+        No bills set up yet. Add your first recurring bill to get started.
+      </div>
+    </div>
+    <div id="calendarView" style="display:none;">
+      <div class="heatmap-header" id="heatmapHeader"></div>
+      <div class="heatmap-grid" id="heatmapGrid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Month Calendar Modal -->
+<div class="modal-overlay" id="calModal">
+  <div class="cal-modal">
+    <div class="cal-modal-header">
+      <h3 id="calModalTitle">January 2026</h3>
+      <button class="cal-modal-close" onclick="closeCalModal()">&times;</button>
+    </div>
+    <div class="cal-modal-body">
+      <div class="cal-weekdays">
+        <div class="cal-weekday">Mon</div><div class="cal-weekday">Tue</div><div class="cal-weekday">Wed</div>
+        <div class="cal-weekday">Thu</div><div class="cal-weekday">Fri</div><div class="cal-weekday">Sat</div><div class="cal-weekday">Sun</div>
+      </div>
+      <div class="cal-days" id="calDays"></div>
+      <div class="cal-summary" id="calSummary"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Bill Modal -->
+<div class="modal-overlay" id="billModal">
+  <div class="modal">
+    <h3 id="billModalTitle">Add Bill</h3>
+    <input type="hidden" id="billEditId">
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" id="billName" placeholder="e.g. Car Insurance">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Amount</label>
+        <input type="number" id="billAmount" placeholder="0" step="any">
+      </div>
+      <div class="form-group">
+        <label>Category</label>
+        <select id="billCategory"><option value="">-- Select --</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Frequency</label>
+        <select id="billFrequency">
+          <option value="weekly">Weekly</option>
+          <option value="monthly" selected>Monthly</option>
+          <option value="quarterly">Quarterly</option>
+          <option value="half-yearly">Half-Yearly</option>
+          <option value="yearly">Yearly</option>
+          <option value="once_in_2_years">Once in 2 Years</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Anchor Date</label>
+        <input type="date" id="billAnchorDate">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Alert Days Before Due</label>
+      <input type="number" id="billAlertDays" value="15" min="0" max="90">
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="billPerpetual" checked onchange="toggleEndDate()">
+      <label for="billPerpetual">Perpetual (no end date)</label>
+    </div>
+    <div class="form-group" id="endDateGroup" style="display:none;">
+      <label>End Date</label>
+      <input type="date" id="billEndDate">
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="billNotes" placeholder="Optional notes..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-confirm" onclick="saveBill()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let CATEGORIES = [];
+let billHistoryCache = {};
+
+async function init() {
+  const resp = await fetch('/categories');
+  const data = await resp.json();
+  CATEGORIES = data.categories;
+  const sel = document.getElementById('billCategory');
+  sel.innerHTML = '<option value="">-- Select --</option>' + CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
+  loadBills();
+}
+
+function fmt(amount) {
+  return '\u20B9' + Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const parts = d.split('-');
+  if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  return d;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+const FREQ_LABELS = {
+  'weekly': 'Weekly', 'monthly': 'Monthly', 'quarterly': 'Quarterly',
+  'half-yearly': 'Half-Yearly', 'yearly': 'Yearly', 'once_in_2_years': 'Every 2 Years'
+};
+
+async function loadBills() {
+  const resp = await fetch('/bills');
+  const data = await resp.json();
+  const bills = data.bills;
+  const grid = document.getElementById('billsGrid');
+  const empty = document.getElementById('emptyState');
+
+  if (!bills || bills.length === 0) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  grid.innerHTML = bills.map(b => {
+    const days = b.days_until_due;
+    const isExpired = b.expired;
+    const dueLabel = isExpired ? 'Expired' : days < 0 ? `Overdue by ${Math.abs(days)}d` : days === 0 ? 'Due today' : `Due in ${days}d`;
+    const dueClass = isExpired ? 'background:#fef2f2;color:#dc2626;' : days < 0 ? 'background:#fef2f2;color:#dc2626;' : days <= 7 ? 'background:#fef3c7;color:#92400e;' : '';
+    const notes = b.notes ? `<div class="bill-notes">${escapeHtml(b.notes)}</div>` : '';
+    const endDateTag = isExpired
+      ? `<span class="bill-meta-tag expired">Expired</span>`
+      : b.end_date
+        ? `<span class="bill-meta-tag end-date">Ends ${formatDate(b.end_date)}</span>`
+        : `<span class="bill-meta-tag perpetual">Perpetual</span>`;
+    return `<div class="bill-card${isExpired ? ' expired' : ''}">
+      <div class="bill-card-top">
+        <div class="bill-card-name">${escapeHtml(b.name)}</div>
+        <div class="bill-card-amount">${fmt(b.amount)}</div>
+      </div>
+      <div class="bill-card-meta">
+        <span class="bill-meta-tag freq">${FREQ_LABELS[b.frequency] || b.frequency}</span>
+        ${b.category ? `<span class="bill-meta-tag">${escapeHtml(b.category)}</span>` : ''}
+        ${!isExpired ? `<span class="bill-meta-tag due" style="${dueClass}">${dueLabel} &middot; ${formatDate(b.next_due_date)}</span>` : ''}
+        ${endDateTag}
+        ${b.alert_days !== 15 ? `<span class="bill-meta-tag">Alert ${b.alert_days}d before</span>` : ''}
+      </div>
+      ${notes}
+      <div class="bill-card-actions">
+        <button class="bill-history-toggle" onclick="toggleHistory(${b.id}, this)">History</button>
+        <button class="btn btn-sm btn-ghost" onclick="showEditModal(${b.id},'${escapeJs(b.name)}',${b.amount},'${escapeJs(b.category)}','${b.frequency}','${b.anchor_date}',${b.alert_days},'${escapeJs(b.notes || '')}','${b.end_date || ''}')">Edit</button>
+        <button class="btn btn-sm btn-danger-ghost" onclick="deleteBill(${b.id},'${escapeJs(b.name)}')">Delete</button>
+      </div>
+      <div class="bill-history" id="history-${b.id}"></div>
+    </div>`;
+  }).join('');
+}
+
+function escapeJs(str) {
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+async function toggleHistory(billId, btn) {
+  const el = document.getElementById(`history-${billId}`);
+  if (el.classList.contains('open')) {
+    el.classList.remove('open');
+    return;
+  }
+  const resp = await fetch(`/bills/${billId}/history`);
+  const data = await resp.json();
+  if (!data.resolutions || data.resolutions.length === 0) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">No resolutions yet.</div>';
+  } else {
+    el.innerHTML = data.resolutions.map(r => `
+      <div class="bill-history-item">
+        <span>Due: ${formatDate(r.due_date)}</span>
+        <span>${r.expense_item ? escapeHtml(r.expense_item) + ' ' + fmt(r.expense_amount) : 'Resolved'} &middot; ${formatDate(r.resolved_at ? r.resolved_at.slice(0,10) : '')}</span>
+      </div>
+    `).join('');
+  }
+  el.classList.add('open');
+}
+
+function toggleEndDate() {
+  const perpetual = document.getElementById('billPerpetual').checked;
+  document.getElementById('endDateGroup').style.display = perpetual ? 'none' : 'block';
+  if (perpetual) document.getElementById('billEndDate').value = '';
+}
+
+function showAddModal() {
+  document.getElementById('billModalTitle').textContent = 'Add Bill';
+  document.getElementById('billEditId').value = '';
+  document.getElementById('billName').value = '';
+  document.getElementById('billAmount').value = '';
+  document.getElementById('billCategory').value = '';
+  document.getElementById('billFrequency').value = 'monthly';
+  document.getElementById('billAnchorDate').value = '';
+  document.getElementById('billAlertDays').value = '15';
+  document.getElementById('billPerpetual').checked = true;
+  document.getElementById('billEndDate').value = '';
+  document.getElementById('endDateGroup').style.display = 'none';
+  document.getElementById('billNotes').value = '';
+  document.getElementById('billModal').classList.add('active');
+  setTimeout(() => document.getElementById('billName').focus(), 100);
+}
+
+function showEditModal(id, name, amount, category, frequency, anchorDate, alertDays, notes, endDate) {
+  document.getElementById('billModalTitle').textContent = 'Edit Bill';
+  document.getElementById('billEditId').value = id;
+  document.getElementById('billName').value = name;
+  document.getElementById('billAmount').value = amount;
+  document.getElementById('billCategory').value = category;
+  document.getElementById('billFrequency').value = frequency;
+  document.getElementById('billAnchorDate').value = anchorDate;
+  document.getElementById('billAlertDays').value = alertDays;
+  const isPerpetual = !endDate;
+  document.getElementById('billPerpetual').checked = isPerpetual;
+  document.getElementById('billEndDate').value = endDate || '';
+  document.getElementById('endDateGroup').style.display = isPerpetual ? 'none' : 'block';
+  document.getElementById('billNotes').value = notes;
+  document.getElementById('billModal').classList.add('active');
+  setTimeout(() => document.getElementById('billName').focus(), 100);
+}
+
+async function saveBill() {
+  const id = document.getElementById('billEditId').value;
+  const perpetual = document.getElementById('billPerpetual').checked;
+  const endDateVal = document.getElementById('billEndDate').value;
+  if (!perpetual && !endDateVal) {
+    alert('Please select an end date or check "Perpetual".');
+    return;
+  }
+  const body = {
+    name: document.getElementById('billName').value.trim(),
+    amount: parseFloat(document.getElementById('billAmount').value),
+    category: document.getElementById('billCategory').value,
+    frequency: document.getElementById('billFrequency').value,
+    anchor_date: document.getElementById('billAnchorDate').value,
+    alert_days: parseInt(document.getElementById('billAlertDays').value) || 15,
+    notes: document.getElementById('billNotes').value.trim(),
+    end_date: perpetual ? null : endDateVal,
+  };
+  if (!body.name || !body.amount || !body.anchor_date) {
+    alert('Please fill in name, amount, and anchor date.');
+    return;
+  }
+  const url = id ? `/bills/${id}` : '/bills';
+  const method = id ? 'PUT' : 'POST';
+  await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  closeModal();
+  loadBills();
+  if (currentView === 'calendar') loadCalendarView();
+}
+
+async function deleteBill(id, name) {
+  if (!confirm(`Delete bill "${name}"? This will also remove its resolution history.`)) return;
+  await fetch(`/bills/${id}`, { method: 'DELETE' });
+  loadBills();
+  if (currentView === 'calendar') loadCalendarView();
+}
+
+function closeModal() {
+  document.getElementById('billModal').classList.remove('active');
+}
+
+document.getElementById('billModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('billModal')) closeModal();
+});
+
+document.getElementById('calModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('calModal')) closeCalModal();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeModal(); closeCalModal(); }
+});
+
+// --- Calendar View ---
+
+let currentView = 'cards';
+let calendarCache = null;
+
+function switchView(view) {
+  currentView = view;
+  document.getElementById('viewCards').classList.toggle('active', view === 'cards');
+  document.getElementById('viewCalendar').classList.toggle('active', view === 'calendar');
+  document.getElementById('cardsView').style.display = view === 'cards' ? '' : 'none';
+  document.getElementById('calendarView').style.display = view === 'calendar' ? '' : 'none';
+  if (view === 'calendar') loadCalendarView();
+}
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// Heat colors from light to strong green
+const HEAT_COLORS = ['#f0fdf4','#dcfce7','#bbf7d0','#86efac','#4ade80','#22c55e','#16a34a','#15803d'];
+
+function getHeatColor(count, maxCount) {
+  if (count === 0) return '#f9fafb';
+  const idx = Math.min(Math.floor((count / Math.max(maxCount, 1)) * (HEAT_COLORS.length - 1)), HEAT_COLORS.length - 1);
+  return HEAT_COLORS[Math.max(1, idx)];
+}
+
+function getTextColor(count, maxCount) {
+  if (count === 0) return 'var(--text-muted)';
+  const ratio = count / Math.max(maxCount, 1);
+  return ratio > 0.5 ? 'white' : '#15803d';
+}
+
+async function loadCalendarView() {
+  const today = new Date();
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+
+  // Show Jan-Dec of current year
+  const months = [];
+  for (let m = 0; m < 12; m++) {
+    months.push({ month: m, year: currentYear });
+  }
+
+  const rangeStart = `${currentYear}-01-01`;
+  const rangeEnd = `${currentYear}-12-31`;
+
+  const resp = await fetch(`/bills/calendar?start=${rangeStart}&end=${rangeEnd}`);
+  const data = await resp.json();
+  calendarCache = data.events;
+
+  // Aggregate per month
+  const monthData = months.map(({ month, year }) => {
+    const prefix = `${year}-${String(month + 1).padStart(2,'0')}`;
+    const events = calendarCache.filter(e => e.date.startsWith(prefix) && !e.expired);
+    const count = events.length;
+    const total = events.reduce((s, e) => s + e.amount, 0);
+    const isCurrent = month === currentMonth;
+    return { month, year, count, total, events, isCurrent };
+  });
+
+  // Year total
+  const yearTotal = monthData.reduce((s, m) => s + m.total, 0);
+  const yearBills = monthData.reduce((s, m) => s + m.count, 0);
+  document.getElementById('heatmapHeader').innerHTML = `
+    <div class="heatmap-year-title">${currentYear}</div>
+    <div class="heatmap-year-total">${yearBills} bills &middot; <strong>${fmt(yearTotal)}</strong></div>
+  `;
+
+  const maxCount = Math.max(...monthData.map(m => m.count), 1);
+  const grid = document.getElementById('heatmapGrid');
+
+  grid.innerHTML = monthData.map(md => {
+    const bg = getHeatColor(md.count, maxCount);
+    const textCol = getTextColor(md.count, maxCount);
+    const amtCol = md.count === 0 ? 'var(--text-muted)' : textCol;
+    const countCol = textCol;
+    const currentClass = md.isCurrent ? ' current-month' : '';
+    return `<div class="heatmap-cell${currentClass}" onclick="openMonthCalendar(${md.year}, ${md.month})" style="background:${bg};">
+      <div class="heatmap-cell-month" style="color:${textCol}">${MONTH_SHORT[md.month]}</div>
+      <div class="heatmap-cell-stats">
+        <div>
+          <div class="heatmap-cell-count" style="color:${countCol}">${md.count}</div>
+          <div class="heatmap-cell-label" style="color:${textCol};opacity:0.7">${md.count === 1 ? 'bill' : 'bills'}</div>
+        </div>
+        <div class="heatmap-cell-amount" style="color:${amtCol}">${md.count > 0 ? fmt(md.total) : '-'}</div>
+      </div>
+      <div class="heatmap-bar" style="background:${md.count > 0 ? getHeatColor(md.count, maxCount) : 'transparent'};opacity:0.5;"></div>
+    </div>`;
+  }).join('');
+}
+
+function openMonthCalendar(year, month) {
+  document.getElementById('calModalTitle').textContent = `${MONTH_NAMES[month]} ${year}`;
+  const daysContainer = document.getElementById('calDays');
+
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  // Monday=0 start
+  let startDow = firstDay.getDay() - 1;
+  if (startDow < 0) startDow = 6;
+
+  const prefix = `${year}-${String(month + 1).padStart(2,'0')}`;
+  const monthEvents = calendarCache ? calendarCache.filter(e => e.date.startsWith(prefix)) : [];
+
+  // Group events by day
+  const dayMap = {};
+  for (const ev of monthEvents) {
+    const day = parseInt(ev.date.split('-')[2]);
+    if (!dayMap[day]) dayMap[day] = [];
+    dayMap[day].push(ev);
+  }
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayDay = todayStr.startsWith(prefix) ? new Date().getDate() : -1;
+
+  let html = '';
+  // Empty cells for offset
+  for (let i = 0; i < startDow; i++) {
+    html += '<div class="cal-day empty"></div>';
+  }
+
+  let totalBills = 0;
+  let totalAmount = 0;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const events = dayMap[d] || [];
+    const activeEvents = events.filter(e => !e.expired);
+    const hasEndDate = events.some(e => e.is_end_date);
+    const hasExpired = events.length > 0 && events.every(e => e.expired);
+    const isToday = d === todayDay;
+
+    totalBills += activeEvents.length;
+    totalAmount += activeEvents.reduce((s, e) => s + e.amount, 0);
+
+    const cellPos = startDow + d; // 1-based position in grid
+    let classes = 'cal-day';
+    if (cellPos <= 7) classes += ' first-row';
+    if (activeEvents.length > 0) classes += ' has-bills';
+    if (hasEndDate) classes += ' is-end-date';
+    if (hasExpired && activeEvents.length === 0) classes += ' has-expired';
+    if (isToday) classes += ' today';
+
+    let tooltip = '';
+    if (events.length > 0) {
+      const items = events.map(e => {
+        let line = `<div class="cal-day-detail-item"><span class="cal-day-detail-name">${escapeHtml(e.name)}</span><span class="cal-day-detail-amount">${e.expired ? '<span style="color:#ef4444">Expired</span>' : fmt(e.amount)}</span></div>`;
+        if (e.is_end_date) line += '<div class="cal-day-detail-end">End date</div>';
+        return line;
+      }).join('');
+      tooltip = `<div class="cal-day-detail">${items}</div>`;
+    }
+
+    const dot = events.length > 0 ? '<div class="cal-day-dot"></div>' : '';
+
+    html += `<div class="${classes}" ${events.length > 0 ? 'onmouseenter="this.querySelector(\'.cal-day-detail\')&&(this.querySelector(\'.cal-day-detail\').style.display=\'block\')" onmouseleave="this.querySelector(\'.cal-day-detail\')&&(this.querySelector(\'.cal-day-detail\').style.display=\'none\')"' : ''}>
+      <span class="cal-day-num">${d}</span>${dot}
+      ${tooltip ? tooltip.replace('style.display', 'style.display') : ''}
+    </div>`;
+  }
+
+  daysContainer.innerHTML = html;
+
+  // Hide tooltips by default
+  daysContainer.querySelectorAll('.cal-day-detail').forEach(el => el.style.display = 'none');
+
+  // Summary
+  document.getElementById('calSummary').innerHTML = `
+    <div class="cal-summary-item"><strong>${totalBills}</strong> bill${totalBills !== 1 ? 's' : ''} due</div>
+    <div class="cal-summary-item"><strong>${fmt(totalAmount)}</strong> total</div>
+    <div class="cal-legend">
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#eff6ff;border:1px solid #93c5fd;"></div> Bill due</div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fef3c7;border:2px solid #f59e0b;"></div> End date</div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fef2f2;border:1px solid #fca5a5;"></div> Expired</div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:white;box-shadow:inset 0 0 0 2px var(--green-500);"></div> Today</div>
+    </div>
+  `;
+
+  document.getElementById('calModal').classList.add('active');
+}
+
+function closeCalModal() {
+  document.getElementById('calModal').classList.remove('active');
+}
+
+init();
+</script>
+</body>
+</html>

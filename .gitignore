@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+expenses.db
+*.db-journal
+.DS_Store

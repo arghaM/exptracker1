@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports - Expense Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
+<style>
+  :root {
+    --green-50: #f0fdf4; --green-100: #dcfce7; --green-500: #22c55e; --green-600: #16a34a; --green-700: #15803d;
+    --blue-50: #eff6ff; --blue-100: #dbeafe; --blue-500: #3b82f6; --blue-600: #2563eb; --blue-700: #1d4ed8;
+    --sidebar-bg: #ffffff; --sidebar-hover: #f8fafc; --sidebar-active: var(--blue-50);
+    --sidebar-text: #64748b; --sidebar-text-active: var(--blue-700); --sidebar-border: #e2e8f0;
+    --bg: #f8fafc; --card-bg: #ffffff; --card-border: #e2e8f0;
+    --text-primary: #1e293b; --text-secondary: #64748b; --text-muted: #94a3b8; --border: #e2e8f0;
+    --sidebar-width: 220px;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text-primary); display: flex; min-height: 100vh; }
+
+  .sidebar { width: var(--sidebar-width); background: var(--sidebar-bg); border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; }
+  .sidebar-brand { padding: 20px 16px 28px; display: flex; align-items: center; gap: 10px; }
+  .sidebar-brand .logo { width: 30px; height: 30px; background: var(--blue-600); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; font-size: 14px; }
+  .sidebar-brand .name { color: var(--text-primary); font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+  .sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
+  .sidebar-link { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--sidebar-text); text-decoration: none; font-size: 13.5px; font-weight: 500; transition: all 0.15s; border: 1px solid transparent; }
+  .sidebar-link:hover { background: var(--sidebar-hover); color: var(--text-primary); }
+  .sidebar-link.active { background: var(--sidebar-active); color: var(--sidebar-text-active); font-weight: 600; border-color: var(--blue-100); }
+  .sidebar-link svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .sidebar-section { padding: 20px 12px 8px; font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; min-height: 100vh; }
+  .topbar { background: var(--card-bg); border-bottom: 1px solid var(--card-border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .topbar h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+  .content { padding: 20px 28px; }
+
+  /* Filter bar */
+  .filters-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+  .filter-date { display: flex; align-items: center; gap: 6px; }
+  .filter-date input[type="date"] { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: var(--font); color: var(--text-primary); }
+  .filter-date input[type="date"]:focus { outline: none; border-color: var(--blue-500); }
+  .filter-select { padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: var(--font); color: var(--text-secondary); background: white; cursor: pointer; font-weight: 500; }
+  .filter-select:focus { outline: none; border-color: var(--blue-500); }
+  .export-btn { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-weight: 600; font-family: var(--font); background: white; color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
+  .export-btn:hover { border-color: var(--blue-500); color: var(--blue-600); background: var(--blue-50); }
+  .export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .export-btn svg { width: 14px; height: 14px; }
+  @media print { .sidebar, .topbar, .filter-chips-bar { display: none !important; } .main { margin-left: 0 !important; } }
+
+  /* Filter chips bar */
+  .filter-chips-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .filter-chip-group { position: relative; }
+  .filter-chip-btn { padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px; font-size: 12px; font-weight: 500; font-family: var(--font); background: white; color: var(--text-secondary); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 5px; }
+  .filter-chip-btn:hover { border-color: var(--blue-500); color: var(--blue-600); }
+  .filter-chip-btn.has-selection { background: var(--blue-50); border-color: var(--blue-500); color: var(--blue-700); font-weight: 600; }
+  .filter-chip-btn .chip-count { background: var(--blue-600); color: white; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600; }
+  .filter-dropdown { position: absolute; top: calc(100% + 6px); left: 0; background: white; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 60; min-width: 220px; max-height: 320px; display: none; flex-direction: column; }
+  .filter-dropdown.open { display: flex; }
+  .filter-dropdown-search { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
+  .filter-dropdown-search input { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-family: var(--font); }
+  .filter-dropdown-search input:focus { outline: none; border-color: var(--blue-500); }
+  .filter-dropdown-list { overflow-y: auto; flex: 1; padding: 6px 0; max-height: 220px; }
+  .filter-dropdown-item { display: flex; align-items: center; gap: 8px; padding: 6px 14px; font-size: 13px; cursor: pointer; transition: background 0.1s; }
+  .filter-dropdown-item:hover { background: #f8fafc; }
+  .filter-dropdown-item input[type="checkbox"] { accent-color: var(--blue-600); width: 14px; height: 14px; cursor: pointer; }
+  .filter-dropdown-item label { cursor: pointer; flex: 1; }
+  .filter-dropdown-footer { padding: 8px 12px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+  .filter-dd-clear { font-size: 11px; color: var(--text-muted); cursor: pointer; background: none; border: none; font-family: var(--font); }
+  .filter-dd-clear:hover { color: var(--text-primary); }
+  .filter-dd-apply { padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; font-family: var(--font); background: var(--blue-600); color: white; border: none; cursor: pointer; }
+  .filter-dd-apply:hover { background: var(--blue-700); }
+  .active-filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .active-filter-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; background: var(--blue-50); color: var(--blue-700); border: 1px solid var(--blue-100); }
+  .active-filter-tag .remove-filter { cursor: pointer; font-size: 13px; color: var(--blue-500); margin-left: 2px; line-height: 1; }
+  .active-filter-tag .remove-filter:hover { color: var(--text-primary); }
+
+  /* Summary row */
+  .summary-row { display: flex; gap: 14px; margin-bottom: 20px; }
+  .summary-card { background: var(--card-bg); border-radius: 12px; padding: 16px 20px; border: 1px solid var(--card-border); flex: 1; }
+  .summary-card .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .summary-card .value { font-size: 22px; font-weight: 700; margin-top: 4px; letter-spacing: -0.3px; }
+  .summary-card .value.green { color: var(--green-600); }
+
+  /* Chart section */
+  .chart-card { background: var(--card-bg); border-radius: 12px; padding: 22px; border: 1px solid var(--card-border); margin-bottom: 20px; }
+  .chart-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .chart-date-range { font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 16px; }
+  .chart-row { display: flex; gap: 20px; align-items: flex-start; }
+  .chart-col { flex: 1; min-width: 0; }
+  .chart-col canvas { max-height: 340px; }
+  .chart-legend { flex: 0 0 260px; max-height: 340px; overflow-y: auto; }
+  .legend-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12px; cursor: default; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); }
+  .legend-val { font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+  .legend-pct { font-size: 11px; color: var(--text-muted); width: 38px; text-align: right; }
+
+  /* Transactions table */
+  .txn-card { background: var(--card-bg); border-radius: 12px; border: 1px solid var(--card-border); overflow: hidden; }
+  .txn-card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 12px; }
+  .txn-card-header h3 { font-size: 14px; font-weight: 600; }
+  .txn-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .txn-table col.col-item { width: 32%; }
+  .txn-table col.col-amount { width: 15%; }
+  .txn-table col.col-category { width: 22%; }
+  .txn-table col.col-account { width: 16%; }
+  .txn-table col.col-tags { width: 15%; }
+  .txn-table th { text-align: left; padding: 8px 18px; font-size: 10px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.8px; font-weight: 600; background: #f9fafb; border-bottom: 1px solid var(--border); }
+  .txn-table td { padding: 9px 18px; font-size: 13px; color: var(--text-primary); border-bottom: 1px solid #f5f5f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .txn-table tr:hover td { background: #fafbfc; }
+  .txn-table .amount { font-weight: 600; }
+  .txn-table .date-group-row td { padding: 10px 18px 6px; font-size: 13px; font-weight: 700; color: var(--text-primary); background: #f1f5f9; border-bottom: 1px solid var(--border); white-space: normal; }
+  .txn-table .date-group-row .day-total { float: right; font-size: 12px; font-weight: 600; color: var(--green-600); }
+  .txn-table .date-group-row:hover td { background: #f1f5f9; }
+  .tag-pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 10px; font-weight: 500; margin-right: 3px; }
+  .cat-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+  .cat-icon { font-size: 14px; }
+  .txn-empty { padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  .txn-scroll { max-height: 600px; overflow-y: auto; }
+  .chart-center-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
+  .chart-center-total { font-size: 20px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.5px; }
+  .chart-center-sub { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .main { margin-left: 0; }
+    .content { padding: 16px; }
+    .topbar { padding: 12px 16px; }
+    .summary-row { flex-direction: column; }
+    .chart-row { flex-direction: column; }
+    .chart-legend { flex: unset; max-height: 200px; }
+    .filters-bar { margin-left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <div class="logo">E</div>
+    <div class="name">ExpTracker</div>
+  </div>
+  <div class="sidebar-nav">
+    <a href="/" class="sidebar-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+      Dashboard
+    </a>
+    <a href="/transactions" class="sidebar-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+      Transactions
+    </a>
+    <a href="/accounts-page" class="sidebar-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+      Accounts
+    </a>
+    <a href="/bills-page" class="sidebar-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      Bills
+    </a>
+    <a href="/reports-page" class="sidebar-link active">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Reports
+    </a>
+    <div class="sidebar-section">Manage</div>
+    <a href="/admin" class="sidebar-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>
+      Categories
+    </a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <h2>Reports</h2>
+    <div class="filters-bar">
+      <div class="filter-date">
+        <input type="date" id="startDate">
+        <span style="color:var(--text-muted);font-size:12px;">to</span>
+        <input type="date" id="endDate">
+      </div>
+      <select class="filter-select" id="groupBySelect" onchange="loadReport()">
+        <option value="category">By Category</option>
+        <option value="group">By Group</option>
+      </select>
+      <button class="filter-dd-apply" onclick="loadReport()">Apply</button>
+      <button class="export-btn" id="exportPdfBtn" onclick="exportPDF()">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Export PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- Filter chips -->
+    <div class="filter-chips-bar">
+      <div class="filter-chip-group" id="catFilterGroup">
+        <button class="filter-chip-btn" id="catFilterBtn" onclick="toggleDropdown('catDropdown')">
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>
+          Category
+        </button>
+        <div class="filter-dropdown" id="catDropdown">
+          <div class="filter-dropdown-search"><input type="text" placeholder="Search categories..." oninput="filterDropdownItems('catDropdown', this.value)"></div>
+          <div class="filter-dropdown-list" id="catDropdownList"></div>
+          <div class="filter-dropdown-footer">
+            <button class="filter-dd-clear" onclick="clearDropdown('catDropdown'); applyFilters()">Clear</button>
+            <button class="filter-dd-apply" onclick="applyFilters(); closeAllDropdowns()">Apply</button>
+          </div>
+        </div>
+      </div>
+      <div class="filter-chip-group" id="tagFilterGroup">
+        <button class="filter-chip-btn" id="tagFilterBtn" onclick="toggleDropdown('tagDropdown')">
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path stroke-linecap="round" d="M12 1v4m0 14v4m-7.07-15.07l2.83 2.83m8.49 8.49l2.83 2.83M1 12h4m14 0h4M4.93 19.07l2.83-2.83m8.49-8.49l2.83-2.83"/></svg>
+          Tags
+        </button>
+        <div class="filter-dropdown" id="tagDropdown">
+          <div class="filter-dropdown-search"><input type="text" placeholder="Search tags..." oninput="filterDropdownItems('tagDropdown', this.value)"></div>
+          <div class="filter-dropdown-list" id="tagDropdownList"></div>
+          <div class="filter-dropdown-footer">
+            <button class="filter-dd-clear" onclick="clearDropdown('tagDropdown'); applyFilters()">Clear</button>
+            <button class="filter-dd-apply" onclick="applyFilters(); closeAllDropdowns()">Apply</button>
+          </div>
+        </div>
+      </div>
+      <div class="filter-chip-group" id="accFilterGroup">
+        <button class="filter-chip-btn" id="accFilterBtn" onclick="toggleDropdown('accDropdown')">
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+          Account
+        </button>
+        <div class="filter-dropdown" id="accDropdown">
+          <div class="filter-dropdown-search"><input type="text" placeholder="Search accounts..." oninput="filterDropdownItems('accDropdown', this.value)"></div>
+          <div class="filter-dropdown-list" id="accDropdownList"></div>
+          <div class="filter-dropdown-footer">
+            <button class="filter-dd-clear" onclick="clearDropdown('accDropdown'); applyFilters()">Clear</button>
+            <button class="filter-dd-apply" onclick="applyFilters(); closeAllDropdowns()">Apply</button>
+          </div>
+        </div>
+      </div>
+      <div class="active-filters" id="activeFilters"></div>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="summary-row">
+      <div class="summary-card">
+        <div class="label">Total Spent</div>
+        <div class="value green" id="totalSpent">--</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Transactions</div>
+        <div class="value" id="txnCount">--</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Avg / Transaction</div>
+        <div class="value" id="avgTxn">--</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Top Category</div>
+        <div class="value" id="topCat" style="font-size:16px;">--</div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="chart-card">
+      <h3 id="chartTitle">Spending Distribution</h3>
+      <div class="chart-date-range" id="chartDateRange"></div>
+      <div class="chart-row">
+        <div class="chart-col" style="position:relative;">
+          <canvas id="pieChart"></canvas>
+          <div class="chart-center-label" id="chartCenterLabel">
+            <div class="chart-center-total" id="chartCenterTotal"></div>
+            <div class="chart-center-sub">Total</div>
+          </div>
+        </div>
+        <div class="chart-legend" id="chartLegend"></div>
+      </div>
+    </div>
+
+    <!-- Transactions Table -->
+    <div class="txn-card">
+      <div class="txn-card-header">
+        <h3 id="txnTitle">Transactions</h3>
+      </div>
+      <div class="txn-scroll" id="txnScroll"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PIE_COLORS = ['#3b82f6','#22c55e','#f59e0b','#8b5cf6','#14b8a6','#f97316','#ef4444','#ec4899','#06b6d4','#84cc16','#64748b','#0ea5e9','#a855f7','#f43f5e','#10b981','#d946ef','#6366f1','#eab308','#78716c','#0891b2'];
+
+let allExpenses = [];
+let filteredExpenses = [];
+let categoryMeta = {};
+let categoryGroups = {};
+let allTags = [];
+let allAccounts = [];
+
+// Active filter selections
+let selectedCategories = new Set();
+let selectedTags = new Set();
+let selectedAccounts = new Set();
+
+let pieChart = null;
+
+function fmt(amount) {
+  return '\u20B9' + Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const parts = d.split('-');
+  if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  return d;
+}
+
+function escH(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function initDates() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  const start = `${y}-${String(m).padStart(2,'0')}-01`;
+  const lastDay = new Date(y, m, 0).getDate();
+  const end = `${y}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  document.getElementById('startDate').value = start;
+  document.getElementById('endDate').value = end;
+}
+
+// --- Dropdown logic ---
+function toggleDropdown(id) {
+  const dd = document.getElementById(id);
+  const wasOpen = dd.classList.contains('open');
+  closeAllDropdowns();
+  if (!wasOpen) dd.classList.add('open');
+}
+
+function closeAllDropdowns() {
+  document.querySelectorAll('.filter-dropdown').forEach(d => d.classList.remove('open'));
+}
+
+function filterDropdownItems(ddId, query) {
+  const q = query.toLowerCase();
+  document.querySelectorAll(`#${ddId} .filter-dropdown-item`).forEach(item => {
+    const text = item.querySelector('label').textContent.toLowerCase();
+    item.style.display = text.includes(q) ? '' : 'none';
+  });
+}
+
+function clearDropdown(ddId) {
+  document.querySelectorAll(`#${ddId} input[type="checkbox"]`).forEach(cb => cb.checked = false);
+}
+
+function getCheckedValues(ddId) {
+  const vals = new Set();
+  document.querySelectorAll(`#${ddId} input[type="checkbox"]:checked`).forEach(cb => vals.add(cb.value));
+  return vals;
+}
+
+function updateChipBtn(btnId, count) {
+  const btn = document.getElementById(btnId);
+  const label = btn.querySelector('svg').nextSibling;
+  // Remove existing count badge
+  const existing = btn.querySelector('.chip-count');
+  if (existing) existing.remove();
+  if (count > 0) {
+    btn.classList.add('has-selection');
+    const badge = document.createElement('span');
+    badge.className = 'chip-count';
+    badge.textContent = count;
+    btn.appendChild(badge);
+  } else {
+    btn.classList.remove('has-selection');
+  }
+}
+
+function applyFilters() {
+  selectedCategories = getCheckedValues('catDropdownList');
+  selectedTags = getCheckedValues('tagDropdownList');
+  selectedAccounts = getCheckedValues('accDropdownList');
+  updateChipBtn('catFilterBtn', selectedCategories.size);
+  updateChipBtn('tagFilterBtn', selectedTags.size);
+  updateChipBtn('accFilterBtn', selectedAccounts.size);
+  renderActiveFilters();
+  filterAndRender();
+}
+
+function renderActiveFilters() {
+  const container = document.getElementById('activeFilters');
+  let html = '';
+  selectedCategories.forEach(c => {
+    html += `<span class="active-filter-tag">${escH(c)} <span class="remove-filter" onclick="removeFilter('cat','${escH(c)}')">&times;</span></span>`;
+  });
+  selectedTags.forEach(t => {
+    html += `<span class="active-filter-tag" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d;">${escH(t)} <span class="remove-filter" onclick="removeFilter('tag','${escH(t)}')">&times;</span></span>`;
+  });
+  selectedAccounts.forEach(a => {
+    html += `<span class="active-filter-tag" style="background:#fef3c7;border-color:#fde68a;color:#92400e;">${escH(a)} <span class="remove-filter" onclick="removeFilter('acc','${escH(a)}')">&times;</span></span>`;
+  });
+  container.innerHTML = html;
+}
+
+function removeFilter(type, value) {
+  if (type === 'cat') { selectedCategories.delete(value); uncheckValue('catDropdownList', value); updateChipBtn('catFilterBtn', selectedCategories.size); }
+  if (type === 'tag') { selectedTags.delete(value); uncheckValue('tagDropdownList', value); updateChipBtn('tagFilterBtn', selectedTags.size); }
+  if (type === 'acc') { selectedAccounts.delete(value); uncheckValue('accDropdownList', value); updateChipBtn('accFilterBtn', selectedAccounts.size); }
+  renderActiveFilters();
+  filterAndRender();
+}
+
+function uncheckValue(listId, value) {
+  const cb = document.querySelector(`#${listId} input[value="${CSS.escape(value)}"]`);
+  if (cb) cb.checked = false;
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.filter-chip-group')) closeAllDropdowns();
+});
+
+// --- Data loading ---
+async function loadReport() {
+  const start = document.getElementById('startDate').value;
+  const end = document.getElementById('endDate').value;
+  if (!start || !end) return;
+
+  // Fetch all data in parallel
+  const [expResp, metaResp, groupResp, tagResp, accResp] = await Promise.all([
+    fetch(`/expenses?start=${start}&end=${end}&limit=500`),
+    fetch('/categories/meta'),
+    fetch('/categories?grouped=true'),
+    fetch('/tags'),
+    fetch(`/reports/accounts?start=${start}&end=${end}`),
+  ]);
+
+  const expData = await expResp.json();
+  categoryMeta = await metaResp.json();
+  const groupData = await groupResp.json();
+  const tagData = await tagResp.json();
+  const accData = await accResp.json();
+
+  allExpenses = expData.expenses || [];
+  allTags = tagData.tags || [];
+  allAccounts = (accData.accounts || []).map(a => a.label && a.label.trim() ? a.label : a.account_name);
+
+  // Build category→group map
+  categoryGroups = {};
+  if (groupData.groups) {
+    for (const [gName, cats] of Object.entries(groupData.groups)) {
+      for (const cat of cats) { categoryGroups[cat] = gName; }
+    }
+  }
+  if (groupData.ungrouped) {
+    for (const cat of groupData.ungrouped) { categoryGroups[cat] = 'Ungrouped'; }
+  }
+
+  // Populate dropdowns
+  populateCatDropdown();
+  populateTagDropdown();
+  populateAccDropdown();
+
+  filterAndRender();
+}
+
+function populateCatDropdown() {
+  const cats = [...new Set(allExpenses.map(e => e.category))].sort();
+  document.getElementById('catDropdownList').innerHTML = cats.map(c => {
+    const meta = categoryMeta[c] || {};
+    const icon = meta.icon || '';
+    const checked = selectedCategories.has(c) ? 'checked' : '';
+    return `<div class="filter-dropdown-item"><input type="checkbox" value="${escH(c)}" ${checked}><label>${icon ? icon + ' ' : ''}${escH(c)}</label></div>`;
+  }).join('');
+}
+
+function populateTagDropdown() {
+  document.getElementById('tagDropdownList').innerHTML = allTags.map(t => {
+    const checked = selectedTags.has(t.name) ? 'checked' : '';
+    return `<div class="filter-dropdown-item"><input type="checkbox" value="${escH(t.name)}" ${checked}><label><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${t.color};margin-right:4px;"></span>${escH(t.name)}</label></div>`;
+  }).join('');
+}
+
+function populateAccDropdown() {
+  const accs = [...new Set(allExpenses.map(e => e.account || 'Manual'))].sort();
+  document.getElementById('accDropdownList').innerHTML = accs.map(a => {
+    const checked = selectedAccounts.has(a) ? 'checked' : '';
+    return `<div class="filter-dropdown-item"><input type="checkbox" value="${escH(a)}" ${checked}><label>${escH(a)}</label></div>`;
+  }).join('');
+}
+
+// --- Filter + render ---
+function filterAndRender() {
+  filteredExpenses = allExpenses.filter(e => {
+    if (selectedCategories.size > 0 && !selectedCategories.has(e.category)) return false;
+    if (selectedTags.size > 0) {
+      const eTags = (e.tags || []).map(t => t.name);
+      if (!eTags.some(t => selectedTags.has(t))) return false;
+    }
+    if (selectedAccounts.size > 0) {
+      const acc = e.account || 'Manual';
+      if (!selectedAccounts.has(acc)) return false;
+    }
+    return true;
+  });
+
+  renderSummary();
+  renderChart();
+  renderTransactions();
+}
+
+function renderSummary() {
+  const total = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+  const count = filteredExpenses.length;
+  document.getElementById('totalSpent').textContent = fmt(total);
+  document.getElementById('txnCount').textContent = count;
+  document.getElementById('avgTxn').textContent = count > 0 ? fmt(total / count) : '--';
+
+  // Top category
+  const catTotals = {};
+  filteredExpenses.forEach(e => { catTotals[e.category] = (catTotals[e.category] || 0) + e.amount; });
+  const sorted = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+  if (sorted.length > 0) {
+    const meta = categoryMeta[sorted[0][0]] || {};
+    document.getElementById('topCat').textContent = `${meta.icon || ''} ${sorted[0][0]}`;
+  } else {
+    document.getElementById('topCat').textContent = '--';
+  }
+}
+
+function formatDatePretty(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function renderChart() {
+  const groupBy = document.getElementById('groupBySelect').value;
+  const isGroup = groupBy === 'group';
+  document.getElementById('chartTitle').textContent = isGroup ? 'Spending by Group' : 'Spending by Category';
+
+  // Date range display
+  const start = document.getElementById('startDate').value;
+  const end = document.getElementById('endDate').value;
+  document.getElementById('chartDateRange').textContent = `${formatDatePretty(start)} — ${formatDatePretty(end)}`;
+
+  // Aggregate
+  const totals = {};
+  filteredExpenses.forEach(e => {
+    const key = isGroup ? (categoryGroups[e.category] || 'Ungrouped') : e.category;
+    totals[key] = (totals[key] || 0) + e.amount;
+  });
+
+  const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  const labels = sorted.map(s => s[0]);
+  const values = sorted.map(s => s[1]);
+  const grandTotal = values.reduce((s, v) => s + v, 0);
+  const colors = labels.map((_, i) => {
+    if (!isGroup) {
+      const meta = categoryMeta[labels[i]];
+      if (meta && meta.color) return meta.color;
+    }
+    return PIE_COLORS[i % PIE_COLORS.length];
+  });
+
+  // Center total
+  document.getElementById('chartCenterTotal').textContent = fmt(grandTotal);
+
+  // Legend
+  const legendEl = document.getElementById('chartLegend');
+  legendEl.innerHTML = sorted.map((s, i) => {
+    const pct = grandTotal > 0 ? ((s[1] / grandTotal) * 100).toFixed(1) : '0';
+    const icon = !isGroup && categoryMeta[s[0]] ? categoryMeta[s[0]].icon + ' ' : '';
+    return `<div class="legend-item">
+      <span class="legend-dot" style="background:${colors[i]}"></span>
+      <span class="legend-name">${icon}${escH(s[0])}</span>
+      <span class="legend-val">${fmt(s[1])}</span>
+      <span class="legend-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  // Chart
+  if (pieChart) pieChart.destroy();
+  const ctx = document.getElementById('pieChart').getContext('2d');
+  pieChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderWidth: 2,
+        borderColor: '#ffffff',
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      cutout: '60%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const pct = grandTotal > 0 ? ((ctx.parsed / grandTotal) * 100).toFixed(1) : '0';
+              return ` ${ctx.label}: ${fmt(ctx.parsed)} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function formatDateGroupHeader(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const dDate = new Date(d); dDate.setHours(0,0,0,0);
+  let prefix = '';
+  if (dDate.getTime() === today.getTime()) prefix = 'Today, ';
+  else if (dDate.getTime() === yesterday.getTime()) prefix = 'Yesterday, ';
+  const weekday = d.toLocaleDateString('en-IN', { weekday: 'long' });
+  const full = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+  return prefix ? `${prefix}${full}` : `${weekday}, ${full}`;
+}
+
+function renderTransactions() {
+  const count = filteredExpenses.length;
+  document.getElementById('txnTitle').textContent = `Transactions (${count})`;
+  const scrollEl = document.getElementById('txnScroll');
+
+  if (count === 0) {
+    scrollEl.innerHTML = '<div class="txn-empty">No transactions found.</div>';
+    return;
+  }
+
+  // Group by date
+  const grouped = {};
+  filteredExpenses.forEach(e => {
+    if (!grouped[e.date]) grouped[e.date] = [];
+    grouped[e.date].push(e);
+  });
+  const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+  let html = `<table class="txn-table">
+    <colgroup>
+      <col class="col-item"><col class="col-amount"><col class="col-category"><col class="col-account"><col class="col-tags">
+    </colgroup>
+    <thead><tr><th>Item</th><th>Amount</th><th>Category</th><th>Account</th><th>Tags</th></tr></thead>
+    <tbody>`;
+
+  sortedDates.forEach(date => {
+    const txns = grouped[date];
+    const dayTotal = txns.reduce((s, e) => s + e.amount, 0);
+    html += `<tr class="date-group-row"><td colspan="5">${formatDateGroupHeader(date)}<span class="day-total">${fmt(dayTotal)}</span></td></tr>`;
+    txns.forEach(e => {
+      const meta = categoryMeta[e.category] || {};
+      const tagHtml = (e.tags || []).map(t =>
+        `<span class="tag-pill" style="background:${t.color}20;color:${t.color}">${escH(t.name)}</span>`
+      ).join('');
+      html += `<tr>
+        <td>${escH(e.item)}</td>
+        <td class="amount">${fmt(e.amount)}</td>
+        <td><span class="cat-badge"><span class="cat-icon">${meta.icon || ''}</span> ${escH(e.category)}</span></td>
+        <td style="color:var(--text-secondary);font-size:12px;">${escH(e.account || 'Manual')}</td>
+        <td>${tagHtml}</td>
+      </tr>`;
+    });
+  });
+
+  html += '</tbody></table>';
+  scrollEl.innerHTML = html;
+}
+
+// --- Export PDF ---
+function buildPdfHtml() {
+  const start = document.getElementById('startDate').value;
+  const end = document.getElementById('endDate').value;
+  const groupBy = document.getElementById('groupBySelect').value;
+  const isGroup = groupBy === 'group';
+
+  const total = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+  const count = filteredExpenses.length;
+  const avg = count > 0 ? fmt(Math.round(total / count)) : '--';
+
+  // Top category
+  const catTotals = {};
+  filteredExpenses.forEach(e => { catTotals[e.category] = (catTotals[e.category] || 0) + e.amount; });
+  const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+  const topCatMeta = sortedCats.length > 0 ? (categoryMeta[sortedCats[0][0]] || {}) : {};
+  const topCatName = sortedCats.length > 0 ? `${topCatMeta.icon || ''} ${sortedCats[0][0]}` : '--';
+
+  // Chart distribution data
+  const distTotals = {};
+  filteredExpenses.forEach(e => {
+    const key = isGroup ? (categoryGroups[e.category] || 'Ungrouped') : e.category;
+    distTotals[key] = (distTotals[key] || 0) + e.amount;
+  });
+  const sortedDist = Object.entries(distTotals).sort((a, b) => b[1] - a[1]);
+  const grandTotal = sortedDist.reduce((s, d) => s + d[1], 0);
+
+  // Get pie chart as image
+  const chartCanvas = document.getElementById('pieChart');
+  const chartImg = chartCanvas.toDataURL('image/png');
+
+  // Legend rows
+  const legendHtml = sortedDist.map((s, i) => {
+    const color = (() => {
+      if (!isGroup) { const m = categoryMeta[s[0]]; if (m && m.color) return m.color; }
+      return PIE_COLORS[i % PIE_COLORS.length];
+    })();
+    const pct = grandTotal > 0 ? ((s[1] / grandTotal) * 100).toFixed(1) : '0';
+    const icon = !isGroup && categoryMeta[s[0]] ? categoryMeta[s[0]].icon : '';
+    return `<tr>
+      <td style="width:16px;padding:4px 0;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};"></span></td>
+      <td style="padding:4px 8px;font-size:11px;color:#475569;">${icon ? icon + ' ' : ''}${escH(s[0])}</td>
+      <td style="padding:4px 8px;font-size:11px;font-weight:600;text-align:right;white-space:nowrap;">${fmt(s[1])}</td>
+      <td style="padding:4px 8px;font-size:10px;color:#94a3b8;text-align:right;width:40px;">${pct}%</td>
+    </tr>`;
+  }).join('');
+
+  // Transactions grouped by date
+  const grouped = {};
+  filteredExpenses.forEach(e => {
+    if (!grouped[e.date]) grouped[e.date] = [];
+    grouped[e.date].push(e);
+  });
+  const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+  let txnHtml = '';
+  sortedDates.forEach(date => {
+    const txns = grouped[date];
+    const dayTotal = txns.reduce((s, e) => s + e.amount, 0);
+    txnHtml += `<tr><td colspan="5" style="padding:10px 14px 6px;font-size:12px;font-weight:700;background:#f1f5f9;border-bottom:1px solid #e2e8f0;">
+      ${formatDateGroupHeader(date)}<span style="float:right;font-size:11px;font-weight:600;color:#16a34a;">${fmt(dayTotal)}</span>
+    </td></tr>`;
+    txns.forEach(e => {
+      const meta = categoryMeta[e.category] || {};
+      const tagHtml = (e.tags || []).map(t =>
+        `<span style="display:inline-block;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:500;margin-right:2px;background:${t.color}20;color:${t.color};">${escH(t.name)}</span>`
+      ).join('');
+      txnHtml += `<tr>
+        <td style="padding:7px 14px;font-size:11px;border-bottom:1px solid #f5f5f5;">${escH(e.item)}</td>
+        <td style="padding:7px 14px;font-size:11px;font-weight:600;border-bottom:1px solid #f5f5f5;">${fmt(e.amount)}</td>
+        <td style="padding:7px 14px;font-size:11px;border-bottom:1px solid #f5f5f5;">${meta.icon || ''} ${escH(e.category)}</td>
+        <td style="padding:7px 14px;font-size:10px;color:#64748b;border-bottom:1px solid #f5f5f5;">${escH(e.account || 'Manual')}</td>
+        <td style="padding:7px 14px;font-size:10px;border-bottom:1px solid #f5f5f5;">${tagHtml}</td>
+      </tr>`;
+    });
+  });
+
+  return `
+  <div style="font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1e293b;padding:0;width:100%;">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:700;letter-spacing:-0.3px;">Expense Report</div>
+        <div style="font-size:12px;font-weight:600;color:#475569;margin-top:2px;">${formatDatePretty(start)} — ${formatDatePretty(end)}</div>
+      </div>
+      <div style="font-size:10px;color:#94a3b8;">Generated ${new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}</div>
+    </div>
+
+    <!-- Summary -->
+    <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">
+      <tr>
+        <td style="width:25%;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+          <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Total Spent</div>
+          <div style="font-size:20px;font-weight:700;color:#16a34a;margin-top:3px;">${fmt(total)}</div>
+        </td>
+        <td style="width:4px;"></td>
+        <td style="width:25%;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+          <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Transactions</div>
+          <div style="font-size:20px;font-weight:700;margin-top:3px;">${count}</div>
+        </td>
+        <td style="width:4px;"></td>
+        <td style="width:25%;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+          <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Avg / Transaction</div>
+          <div style="font-size:20px;font-weight:700;margin-top:3px;">${avg}</div>
+        </td>
+        <td style="width:4px;"></td>
+        <td style="width:25%;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+          <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Top Category</div>
+          <div style="font-size:14px;font-weight:700;margin-top:3px;">${topCatName}</div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Chart Section -->
+    <div style="border:1px solid #e2e8f0;border-radius:10px;padding:18px;margin-bottom:18px;background:white;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:2px;">${isGroup ? 'Spending by Group' : 'Spending by Category'}</div>
+      <div style="font-size:11px;font-weight:700;color:#1e293b;margin-bottom:14px;">${formatDatePretty(start)} — ${formatDatePretty(end)}</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="width:45%;vertical-align:top;text-align:center;padding-right:16px;">
+            <div style="position:relative;display:inline-block;">
+              <img src="${chartImg}" style="width:220px;height:220px;" />
+            </div>
+            <div style="font-size:16px;font-weight:700;margin-top:6px;">${fmt(grandTotal)}</div>
+            <div style="font-size:9px;color:#94a3b8;">Total</div>
+          </td>
+          <td style="vertical-align:top;">
+            <table style="width:100%;border-collapse:collapse;">${legendHtml}</table>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Transactions -->
+    <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:white;">
+      <div style="padding:14px 16px 10px;font-size:13px;font-weight:600;">Transactions (${count})</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <colgroup>
+          <col style="width:30%"><col style="width:14%"><col style="width:22%"><col style="width:18%"><col style="width:16%">
+        </colgroup>
+        <thead>
+          <tr style="background:#f9fafb;">
+            <th style="text-align:left;padding:6px 14px;font-size:9px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.7px;font-weight:600;border-bottom:1px solid #e2e8f0;">Item</th>
+            <th style="text-align:left;padding:6px 14px;font-size:9px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.7px;font-weight:600;border-bottom:1px solid #e2e8f0;">Amount</th>
+            <th style="text-align:left;padding:6px 14px;font-size:9px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.7px;font-weight:600;border-bottom:1px solid #e2e8f0;">Category</th>
+            <th style="text-align:left;padding:6px 14px;font-size:9px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.7px;font-weight:600;border-bottom:1px solid #e2e8f0;">Account</th>
+            <th style="text-align:left;padding:6px 14px;font-size:9px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.7px;font-weight:600;border-bottom:1px solid #e2e8f0;">Tags</th>
+          </tr>
+        </thead>
+        <tbody>${txnHtml}</tbody>
+      </table>
+    </div>
+
+    <div style="text-align:center;padding:16px 0 4px;font-size:9px;color:#cbd5e1;">ExpTracker Report</div>
+  </div>`;
+}
+
+async function exportPDF() {
+  const btn = document.getElementById('exportPdfBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Generating...';
+
+  const start = document.getElementById('startDate').value;
+  const end = document.getElementById('endDate').value;
+  const groupBy = document.getElementById('groupBySelect').value;
+  const filename = `expense-report_${start}_to_${end}_by-${groupBy}.pdf`;
+
+  const content = document.querySelector('.content');
+
+  // Save original states
+  const txnScroll = document.getElementById('txnScroll');
+  const chipsBar = document.querySelector('.filter-chips-bar');
+  const chartRow = document.querySelector('.chart-row');
+  const chartCol = document.querySelector('.chart-col');
+  const chartLegend = document.getElementById('chartLegend');
+  const centerLabel = document.getElementById('chartCenterLabel');
+
+  const saved = {
+    txnMaxHeight: txnScroll.style.maxHeight,
+    txnOverflow: txnScroll.style.overflow,
+    chipsDisplay: chipsBar.style.display,
+    chartRowDir: chartRow.style.flexDirection,
+    chartRowGap: chartRow.style.gap,
+    chartColMax: chartCol.style.maxWidth,
+    legendFlex: chartLegend.style.flex,
+    legendMax: chartLegend.style.maxHeight,
+    legendOverflow: chartLegend.style.overflow,
+    centerDisplay: centerLabel.style.display,
+  };
+
+  // Apply PDF-friendly overrides
+  txnScroll.style.maxHeight = 'none';
+  txnScroll.style.overflow = 'visible';
+  chipsBar.style.display = 'none';
+  centerLabel.style.display = 'none';
+  // Stack chart and legend vertically
+  chartRow.style.flexDirection = 'column';
+  chartRow.style.gap = '16px';
+  chartCol.style.maxWidth = '320px';
+  chartLegend.style.flex = 'unset';
+  chartLegend.style.maxHeight = 'none';
+  chartLegend.style.overflow = 'visible';
+
+  await new Promise(r => setTimeout(r, 100));
+
+  try {
+    await html2pdf().set({
+      margin: [10, 10, 10, 10],
+      filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.summary-card'] },
+    }).from(content).save();
+  } catch (err) {
+    console.error('PDF export failed:', err);
+  }
+
+  // Restore
+  txnScroll.style.maxHeight = saved.txnMaxHeight;
+  txnScroll.style.overflow = saved.txnOverflow;
+  chipsBar.style.display = saved.chipsDisplay;
+  chartRow.style.flexDirection = saved.chartRowDir;
+  chartRow.style.gap = saved.chartRowGap;
+  chartCol.style.maxWidth = saved.chartColMax;
+  chartLegend.style.flex = saved.legendFlex;
+  chartLegend.style.maxHeight = saved.legendMax;
+  chartLegend.style.overflow = saved.legendOverflow;
+  centerLabel.style.display = saved.centerDisplay;
+
+  btn.disabled = false;
+  btn.innerHTML = '<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> Export PDF';
+}
+
+// Init
+initDates();
+loadReport();
+</script>
+</body>
+</html>
