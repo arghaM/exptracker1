@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import List, Optional
 
 from fastapi import FastAPI, Query, UploadFile, File
 from fastapi.responses import HTMLResponse, Response
@@ -24,7 +25,7 @@ class ExpenseUpdate(BaseModel):
     notes: str = ""
     account: str = ""
     apply_override: bool = False
-    tag_ids: list[int] | None = None
+    tag_ids: Optional[List[int]] = None
 
 async def sync_telegram_once() -> dict:
     """Fetch and process new Telegram messages once. Returns sync stats."""
@@ -152,8 +153,8 @@ def account_transactions(
 class AccountLabelUpdate(BaseModel):
     account_name: str
     label: str
-    icon: str | None = None
-    color: str | None = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
 
 
 @app.put("/accounts/label")
@@ -166,9 +167,9 @@ def set_account_label(body: AccountLabelUpdate):
 
 class CategoryCreate(BaseModel):
     name: str
-    group_name: str | None = None
-    icon: str | None = None
-    color: str | None = None
+    group_name: Optional[str] = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
     excluded: bool = False
 
 
@@ -178,7 +179,7 @@ class GroupRename(BaseModel):
 
 
 class CategoryGroupUpdate(BaseModel):
-    group_name: str | None = None
+    group_name: Optional[str] = None
 
 
 class BudgetUpdate(BaseModel):
@@ -186,9 +187,9 @@ class BudgetUpdate(BaseModel):
 
 
 class CategoryDetailsUpdate(BaseModel):
-    icon: str | None = None
-    color: str | None = None
-    excluded: bool | None = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    excluded: Optional[bool] = None
 
 
 @app.get("/categories")
@@ -310,7 +311,7 @@ def list_pending_expenses():
 
 
 class BulkApproveRequest(BaseModel):
-    ids: list[int]
+    ids: List[int]
 
 
 @app.put("/expenses/approve-bulk")
@@ -520,7 +521,7 @@ class BillCreate(BaseModel):
     anchor_date: str
     alert_days: int = 15
     notes: str = ""
-    end_date: str | None = None
+    end_date: Optional[str] = None
 
 
 class BillUpdate(BaseModel):
@@ -531,12 +532,12 @@ class BillUpdate(BaseModel):
     anchor_date: str
     alert_days: int = 15
     notes: str = ""
-    end_date: str | None = None
+    end_date: Optional[str] = None
 
 
 class BillResolve(BaseModel):
     due_date: str
-    expense_id: int | None = None
+    expense_id: Optional[int] = None
 
 
 @app.get("/bills-page", response_class=HTMLResponse)
