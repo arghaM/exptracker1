@@ -206,8 +206,8 @@ def categories_meta():
 
 @app.get("/categories/spending")
 def categories_spending(
-    start: str | None = Query(None),
-    end: str | None = Query(None),
+    start: Optional[str] = Query(None),
+    end: Optional[str] = Query(None),
 ):
     if not start or not end:
         start, end = _month_range()
@@ -293,8 +293,8 @@ def health():
 
 @app.get("/expenses")
 def list_expenses(
-    start: str | None = Query(None, description="Start date (YYYY-MM-DD)"),
-    end: str | None = Query(None, description="End date (YYYY-MM-DD)"),
+    start: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     limit: int = Query(50, ge=1, le=500),
 ):
     if not start:
@@ -401,14 +401,14 @@ def chart_weekly(year: int, month: int):
 
 # --- Reports ---
 
-def _week_range(date_str: str | None = None):
+def _week_range(date_str: Optional[str] = None):
     d = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else datetime.now().date()
     start = d - timedelta(days=d.weekday())  # Monday
     end = start + timedelta(days=6)
     return start.isoformat(), end.isoformat()
 
 
-def _month_range(year: int | None = None, month: int | None = None):
+def _month_range(year: Optional[int] = None, month: Optional[int] = None):
     now = datetime.now().date()
     y = year or now.year
     m = month or now.month
@@ -475,8 +475,8 @@ def yearly_report_by_year(year: int):
 
 @app.get("/reports/group-summary")
 def group_summary_report(
-    start: str | None = Query(None),
-    end: str | None = Query(None),
+    start: Optional[str] = Query(None),
+    end: Optional[str] = Query(None),
 ):
     if not start:
         start, _ = _month_range()
@@ -490,8 +490,8 @@ def group_summary_report(
 @app.get("/reports/category")
 def category_report(
     category: str = Query(..., description="Category name"),
-    start: str | None = Query(None),
-    end: str | None = Query(None),
+    start: Optional[str] = Query(None),
+    end: Optional[str] = Query(None),
 ):
     expenses = db.get_expenses_by_category(category, start, end)
     total = sum(e["amount"] for e in expenses)
@@ -500,8 +500,8 @@ def category_report(
 
 @app.get("/reports/person")
 def person_report(
-    start: str | None = Query(None),
-    end: str | None = Query(None),
+    start: Optional[str] = Query(None),
+    end: Optional[str] = Query(None),
 ):
     return {"persons": db.get_person_summary(start, end)}
 
