@@ -124,8 +124,8 @@
   .pie-body { display: flex; align-items: flex-start; gap: 32px; }
   .pie-canvas-wrap { flex: 0 0 280px; position: relative; }
   .pie-canvas-wrap canvas { max-height: 280px; }
-  .pie-legend { flex: 1; min-width: 0; column-width: 220px; column-gap: 24px; column-fill: auto; max-height: 264px; }
-  .pie-legend-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f9fafb; cursor: pointer; transition: background 0.1s; border-radius: 6px; padding-left: 4px; padding-right: 4px; break-inside: avoid; }
+  .pie-legend { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 24px; align-content: start; }
+  .pie-legend-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f9fafb; cursor: pointer; transition: background 0.1s; border-radius: 6px; padding-left: 4px; padding-right: 4px; }
   .pie-legend-item:hover { background: #f9fafb; }
   .pie-legend-item:last-child { border-bottom: none; }
   .pie-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
