@@ -662,12 +662,6 @@ def refund_expense(expense_id: int, body: RefundRequest):
         return {"status": "error", "error": str(e)}
 
 
-@app.get("/expenses/{expense_id}/refund")
-def get_refund(expense_id: int):
-    refund = db.get_refund_for(expense_id)
-    return {"refund": refund}
-
-
 class TagCreate(BaseModel):
     name: str
     color: str = "#3b82f6"

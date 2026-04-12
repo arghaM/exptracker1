@@ -560,7 +560,7 @@ function renderList() {
 }
 
 // --- Detail Panel ---
-async function selectTxn(id) {
+function selectTxn(id) {
   selectedId = id;
   editMode = false;
   // Highlight
@@ -570,15 +570,6 @@ async function selectTxn(id) {
 
   const e = allExpenses.find(x => x.id === id);
   if (!e) return;
-
-  // Check refund status from server (handles cross-month refunds)
-  if (!e.refund_of && !e._refunded) {
-    try {
-      const resp = await fetch(`/expenses/${id}/refund`);
-      const data = await resp.json();
-      if (data.refund) e._refunded = true;
-    } catch(err) {}
-  }
 
   document.getElementById('detailEmpty').style.display = 'none';
   const panel = document.getElementById('detailContent');
