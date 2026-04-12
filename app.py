@@ -634,6 +634,40 @@ async def backup_import(file: UploadFile = File(...)):
 
 # --- Tags ---
 
+class RefundRequest(BaseModel):
+    refund_type: str  # "full" or "partial"
+    amount: Optional[float] = None
+
+
+@app.post("/expenses/{expense_id}/refund")
+def refund_expense(expense_id: int, body: RefundRequest):
+    try:
+        exp = db.get_expenses_by_date_range("2000-01-01", "2099-12-31")
+        original = next((e for e in exp if e["id"] == expense_id), None)
+        if not original:
+            return {"status": "error", "error": "Transaction not found"}
+
+        if body.refund_type == "partial":
+            if not body.amount or body.amount <= 0:
+                return {"status": "error", "error": "Partial refund requires a positive amount"}
+            if body.amount > original["amount"]:
+                return {"status": "error", "error": "Refund amount cannot exceed original amount"}
+            refund_amount = body.amount
+        else:
+            refund_amount = original["amount"]
+
+        refund_id = db.create_refund(expense_id, refund_amount)
+        return {"status": "ok", "refund_id": refund_id}
+    except ValueError as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/expenses/{expense_id}/refund")
+def get_refund(expense_id: int):
+    refund = db.get_refund_for(expense_id)
+    return {"refund": refund}
+
+
 class TagCreate(BaseModel):
     name: str
     color: str = "#3b82f6"

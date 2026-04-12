@@ -200,6 +200,41 @@
   .recur-btn-save:hover { background: var(--blue-700); }
   .recur-btn-save svg { width: 16px; height: 16px; }
 
+  /* Refund styles */
+  .txn-amount.refund { color: var(--green-600); }
+  .refund-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .refund-badge.is-refund { background: var(--green-50); color: var(--green-700); }
+  .refund-badge.is-refunded { background: var(--red-50); color: var(--red-500); }
+
+  .btn-refund { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); font-size: 13px; font-weight: 500; }
+  .btn-refund svg { width: 16px; height: 16px; }
+  .btn-refund:hover { color: var(--green-600); }
+
+  /* Refund modal */
+  .refund-modal { background: white; border-radius: 16px; padding: 28px; width: 380px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+  .refund-modal h3 { font-size: 18px; font-weight: 600; margin-bottom: 6px; letter-spacing: -0.3px; display: flex; align-items: center; justify-content: space-between; }
+  .refund-modal .modal-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; }
+  .refund-modal .modal-close { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 18px; padding: 4px; }
+
+  .refund-type-btns { display: flex; gap: 8px; margin-bottom: 18px; }
+  .refund-type-btn { flex: 1; padding: 14px; border: 2px solid var(--border); border-radius: 12px; background: white; cursor: pointer; text-align: center; transition: all 0.15s; font-family: var(--font); }
+  .refund-type-btn:hover { border-color: var(--green-500); background: var(--green-50); }
+  .refund-type-btn.selected { border-color: var(--green-600); background: var(--green-50); }
+  .refund-type-btn .rt-icon { font-size: 20px; display: block; margin-bottom: 4px; }
+  .refund-type-btn .rt-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .refund-type-btn .rt-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  .refund-amount-field { margin-bottom: 18px; display: none; }
+  .refund-amount-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .refund-amount-field input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 16px; font-weight: 600; font-family: var(--font); }
+  .refund-amount-field input:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px rgba(34,197,94,0.1); }
+
+  .refund-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  .refund-btn-cancel { background: #f3f4f6; color: var(--text-secondary); border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 500; font-family: var(--font); }
+  .refund-btn-cancel:hover { background: #e5e7eb; }
+  .refund-btn-save { background: var(--green-600); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; font-family: var(--font); }
+  .refund-btn-save:hover { background: var(--green-700); }
+
   @media (max-width: 900px) {
     .content-split { flex-direction: column; }
     .left-panel { flex: none; max-width: 100%; border-right: none; max-height: 60vh; }
@@ -305,6 +340,42 @@
   </div>
 </div>
 
+<!-- Refund Modal -->
+<div class="modal-overlay" id="refundModal" onclick="if(event.target===this)closeRefundModal()">
+  <div class="refund-modal">
+    <h3>
+      Refund Transaction
+      <button class="modal-close" onclick="closeRefundModal()">&times;</button>
+    </h3>
+    <div class="modal-sub" id="refundModalSub"></div>
+
+    <div class="recur-preview" id="refundPreview"></div>
+
+    <div class="refund-type-btns">
+      <div class="refund-type-btn selected" id="btnFullRefund" onclick="setRefundType('full')">
+        <span class="rt-icon">💰</span>
+        <span class="rt-label">Full Refund</span>
+        <span class="rt-desc">Entire amount</span>
+      </div>
+      <div class="refund-type-btn" id="btnPartialRefund" onclick="setRefundType('partial')">
+        <span class="rt-icon">✂️</span>
+        <span class="rt-label">Partial Refund</span>
+        <span class="rt-desc">Custom amount</span>
+      </div>
+    </div>
+
+    <div class="refund-amount-field" id="refundAmountField">
+      <label>Refund Amount (₹)</label>
+      <input type="number" id="refundAmountInput" step="0.01" min="0.01" placeholder="Enter amount">
+    </div>
+
+    <div class="refund-actions">
+      <button class="refund-btn-cancel" onclick="closeRefundModal()">Cancel</button>
+      <button class="refund-btn-save" onclick="submitRefund()">Process Refund</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -398,6 +469,11 @@ async function loadTransactions() {
   const resp = await fetch(`/expenses?start=${start}&end=${end}&limit=500`);
   const data = await resp.json();
   allExpenses = data.expenses;
+  // Mark expenses that have been refunded (their id appears as refund_of in another expense)
+  const refundOfIds = new Set(allExpenses.filter(e => e.refund_of).map(e => e.refund_of));
+  for (const e of allExpenses) {
+    e._refunded = refundOfIds.has(e.id);
+  }
   renderList();
 }
 
@@ -461,13 +537,20 @@ function renderList() {
         const acctDisplay = e.account ? escH(e.account) : 'Manual account';
         const sel = selectedId === e.id ? ' selected' : '';
         const tagsHtml = (e.tags && e.tags.length) ? `<span class="tag-pills-inline">${tagPills(e.tags, true)}</span>` : '';
+        const isRefund = e.amount < 0 || e.refund_of;
+        const isRefunded = e._refunded;
+        const amtClass = isRefund ? ' refund' : '';
+        const amtDisplay = isRefund ? '+' + fmtShort(Math.abs(e.amount)) : fmtShort(e.amount);
+        let badges = '';
+        if (isRefund) badges += '<span class="refund-badge is-refund">Refund</span>';
+        if (isRefunded) badges += '<span class="refund-badge is-refunded">Refunded</span>';
         html += `<div class="txn-row${sel}" data-id="${e.id}" onclick="selectTxn(${e.id})">
           <div class="txn-left">
             <span class="txn-item">${escH(e.item)}</span>
             <span class="txn-account">${acctDisplay}</span>
           </div>
-          ${catBadge(e.category, e.id)}${tagsHtml}
-          <span class="txn-amount">${fmtShort(e.amount)}</span>
+          ${catBadge(e.category, e.id)}${tagsHtml}${badges}
+          <span class="txn-amount${amtClass}">${amtDisplay}</span>
         </div>`;
       }
     }
@@ -477,7 +560,7 @@ function renderList() {
 }
 
 // --- Detail Panel ---
-function selectTxn(id) {
+async function selectTxn(id) {
   selectedId = id;
   editMode = false;
   // Highlight
@@ -487,6 +570,15 @@ function selectTxn(id) {
 
   const e = allExpenses.find(x => x.id === id);
   if (!e) return;
+
+  // Check refund status from server (handles cross-month refunds)
+  if (!e.refund_of && !e._refunded) {
+    try {
+      const resp = await fetch(`/expenses/${id}/refund`);
+      const data = await resp.json();
+      if (data.refund) e._refunded = true;
+    } catch(err) {}
+  }
 
   document.getElementById('detailEmpty').style.display = 'none';
   const panel = document.getElementById('detailContent');
@@ -498,10 +590,23 @@ function renderDetailView(e) {
   const panel = document.getElementById('detailContent');
   const acctDisplay = e.account || 'Manual account';
   const meta = CAT_META[e.category] || {icon:'📋',color:'#94a3b8'};
+  const isRefund = e.amount < 0 || e.refund_of;
+  const isRefunded = e._refunded;
+  const showRefundBtn = !isRefund && !isRefunded;
+  const amtStyle = isRefund ? ' style="color:var(--green-600)"' : '';
+  const amtText = isRefund ? '+' + fmt(Math.abs(e.amount)) : fmt(e.amount);
+
+  let statusBadge = '';
+  if (isRefund) statusBadge = '<span class="refund-badge is-refund" style="margin-left:8px;">Refund</span>';
+  if (isRefunded) statusBadge = '<span class="refund-badge is-refunded" style="margin-left:8px;">Refunded</span>';
+
   panel.innerHTML = `
     <div class="detail-header">
-      <span class="detail-header-title">Transaction</span>
+      <span class="detail-header-title">Transaction${statusBadge}</span>
       <div class="detail-actions">
+        ${showRefundBtn ? `<button class="btn-refund" onclick="openRefundModal()" title="Process refund">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+        </button>` : ''}
         <button class="btn-recurring" onclick="openRecurModal()" title="Make recurring bill">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
@@ -513,7 +618,7 @@ function renderDetailView(e) {
       <div class="detail-date">${fullDate(e.date)}</div>
       <div class="detail-title-row">
         <span class="detail-item-name">${escH(e.item)}</span>
-        <span class="detail-amount">${fmt(e.amount)}</span>
+        <span class="detail-amount"${amtStyle}>${amtText}</span>
       </div>
       <div class="detail-field">
         <span class="detail-field-label">Account</span>
@@ -970,6 +1075,73 @@ async function saveRecurring() {
     }
   } else {
     alert('Error creating bill: ' + (data.error || 'Unknown error'));
+  }
+}
+
+// --- Refund Modal ---
+let refundType = 'full';
+
+function setRefundType(type) {
+  refundType = type;
+  document.getElementById('btnFullRefund').classList.toggle('selected', type === 'full');
+  document.getElementById('btnPartialRefund').classList.toggle('selected', type === 'partial');
+  document.getElementById('refundAmountField').style.display = type === 'partial' ? 'block' : 'none';
+  if (type === 'partial') {
+    const e = allExpenses.find(x => x.id === selectedId);
+    const input = document.getElementById('refundAmountInput');
+    if (e) input.max = e.amount;
+    input.focus();
+  }
+}
+
+function openRefundModal() {
+  const e = allExpenses.find(x => x.id === selectedId);
+  if (!e) return;
+  refundType = 'full';
+
+  const meta = CAT_META[e.category] || {icon: '\uD83D\uDCCB', color: '#94a3b8'};
+  document.getElementById('refundModalSub').textContent = 'Create a refund for this transaction';
+  document.getElementById('refundPreview').innerHTML = `
+    <span class="recur-preview-icon">${meta.icon}</span>
+    <div class="recur-preview-info">
+      <div class="recur-preview-name">${escH(e.item)}</div>
+      <div class="recur-preview-detail">${fmt(e.amount)} \u2022 ${escH(e.category)}</div>
+    </div>`;
+
+  setRefundType('full');
+  document.getElementById('refundAmountInput').value = '';
+  document.getElementById('refundModal').classList.add('active');
+}
+
+function closeRefundModal() {
+  document.getElementById('refundModal').classList.remove('active');
+}
+
+async function submitRefund() {
+  const e = allExpenses.find(x => x.id === selectedId);
+  if (!e) return;
+
+  const body = { refund_type: refundType };
+  if (refundType === 'partial') {
+    const amt = parseFloat(document.getElementById('refundAmountInput').value);
+    if (!amt || amt <= 0) { alert('Please enter a valid amount.'); return; }
+    if (amt > e.amount) { alert('Refund amount cannot exceed original amount.'); return; }
+    body.amount = amt;
+  }
+
+  const resp = await fetch(`/expenses/${e.id}/refund`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  closeRefundModal();
+
+  if (data.status === 'ok') {
+    await loadTransactions();
+    selectTxn(selectedId);
+  } else {
+    alert('Error: ' + (data.error || 'Unknown error'));
   }
 }
 

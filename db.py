@@ -235,6 +235,13 @@ def init_db():
         )
     conn.commit()
 
+    # Migration: add refund_of column to expenses if missing
+    try:
+        conn.execute("ALTER TABLE expenses ADD COLUMN refund_of INTEGER DEFAULT NULL")
+        conn.commit()
+    except Exception:
+        pass
+
     conn.close()
 
 
@@ -1218,3 +1225,54 @@ def import_all_data(data: dict):
 
     # Re-run migrations to ensure schema is up to date
     init_db()
+
+
+# --- Refunds ---
+
+def create_refund(original_id: int, amount: float) -> int:
+    """Create a refund (negative amount) transaction linked to the original."""
+    conn = get_connection()
+    orig = conn.execute("SELECT * FROM expenses WHERE id = ?", (original_id,)).fetchone()
+    if not orig:
+        conn.close()
+        raise ValueError("Original transaction not found")
+
+    # Check not already refunded
+    existing = conn.execute(
+        "SELECT id FROM expenses WHERE refund_of = ?", (original_id,)
+    ).fetchone()
+    if existing:
+        conn.close()
+        raise ValueError("Transaction already refunded")
+
+    refund_amount = -abs(amount)
+    cur = conn.execute(
+        """INSERT INTO expenses (date, raw_text, item, amount, category, person,
+           telegram_message_id, notes, account, status, refund_of)
+           VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, 'approved', ?)""",
+        (
+            datetime.now().strftime("%Y-%m-%d"),
+            orig["raw_text"],
+            orig["item"],
+            refund_amount,
+            orig["category"],
+            orig["person"],
+            f"Refund of transaction #{original_id}",
+            orig["account"] or "",
+            original_id,
+        ),
+    )
+    refund_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return refund_id
+
+
+def get_refund_for(expense_id: int) -> dict | None:
+    """Get the refund transaction for a given expense, if any."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM expenses WHERE refund_of = ?", (expense_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
