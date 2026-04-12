@@ -50,23 +50,26 @@
 
   /* Transaction list */
   .month-group { }
-  .month-header { display: flex; justify-content: space-between; align-items: baseline; padding: 20px 24px 8px; }
-  .month-header:first-child { padding-top: 12px; }
-  .month-name { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
-  .month-total { font-size: 16px; font-weight: 700; }
+  .month-card { margin: 20px 24px 12px; padding: 20px 24px; border: 1.5px solid var(--border); border-radius: 14px; text-align: center; background: white; }
+  .month-card-name { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: var(--text-primary); margin-bottom: 14px; }
+  .month-card-stats { display: flex; justify-content: center; gap: 32px; }
+  .month-card-stat { text-align: center; }
+  .month-card-stat-value { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+  .month-card-stat-value.green { color: var(--green-600); }
+  .month-card-stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-top: 3px; }
 
-  .date-header { padding: 10px 24px 4px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+  .date-header { padding: 10px 24px 4px; font-size: 13px; font-weight: 700; color: var(--text-primary); }
 
   .txn-row { display: flex; align-items: center; gap: 10px; padding: 10px 24px; cursor: pointer; transition: background 0.1s; border-left: 3px solid transparent; }
   .txn-row:hover { background: #fafbfc; }
   .txn-row.selected { background: var(--blue-50); border-left-color: var(--blue-600); }
-  .txn-item { font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .txn-item { font-size: 14px; font-weight: 400; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .txn-account { font-size: 12px; color: var(--text-muted); margin-left: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .txn-left { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
   .cat-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; cursor: pointer; transition: opacity 0.15s; position: relative; }
   .cat-badge:hover { opacity: 0.8; }
   .cat-badge-arrow { font-size: 10px; margin-left: 2px; opacity: 0.6; }
-  .txn-amount { font-size: 14px; font-weight: 700; flex-shrink: 0; min-width: 70px; text-align: right; }
+  .txn-amount { font-size: 14px; font-weight: 500; flex-shrink: 0; min-width: 70px; text-align: right; }
   .txn-sep { border-bottom: 1px solid #f3f4f6; margin: 0 24px; }
 
   /* Category picker dropdown */
@@ -353,12 +356,12 @@
 
     <div class="refund-type-btns">
       <div class="refund-type-btn selected" id="btnFullRefund" onclick="setRefundType('full')">
-        <span class="rt-icon">💰</span>
+        <span class="rt-icon">💸</span>
         <span class="rt-label">Full Refund</span>
         <span class="rt-desc">Entire amount</span>
       </div>
       <div class="refund-type-btn" id="btnPartialRefund" onclick="setRefundType('partial')">
-        <span class="rt-icon">✂️</span>
+        <span class="rt-icon">💳</span>
         <span class="rt-label">Partial Refund</span>
         <span class="rt-desc">Custom amount</span>
       </div>
@@ -387,6 +390,7 @@ let CATEGORIES = [];
 let CAT_META = {};
 let ALL_TAGS = [];
 let allExpenses = [];
+let totalBudget = 0;
 let selectedId = null;
 let editMode = false;
 let editTagIds = [];
@@ -433,12 +437,13 @@ function fullDate(dateStr) {
 
 // --- Init ---
 async function init() {
-  const [catResp, metaResp, tagsResp] = await Promise.all([
-    fetch('/categories'), fetch('/categories/meta'), fetch('/tags')
+  const [catResp, metaResp, tagsResp, spendResp] = await Promise.all([
+    fetch('/categories'), fetch('/categories/meta'), fetch('/tags'), fetch('/categories/spending')
   ]);
   CATEGORIES = (await catResp.json()).categories;
   CAT_META = await metaResp.json();
   ALL_TAGS = (await tagsResp.json()).tags;
+  totalBudget = (await spendResp.json()).total_budget || 0;
   currentYear = now.getFullYear();
   currentMonth = now.getMonth() + 1;
   updateMonthLabel();
@@ -518,10 +523,24 @@ function renderList() {
   for (const [mk, mg] of months) {
     const [y,m] = mk.split('-');
     const monthName = `${MONTH_FULL[parseInt(m)-1]} ${y}`;
+    const underBudget = totalBudget > 0 ? totalBudget - mg.total : 0;
     html += `<div class="month-group">
-      <div class="month-header">
-        <span class="month-name">${monthName}</span>
-        <span class="month-total">${fmtShort(mg.total)}</span>
+      <div class="month-card">
+        <div class="month-card-name">${monthName}</div>
+        <div class="month-card-stats">
+          <div class="month-card-stat">
+            <div class="month-card-stat-value">${fmtShort(mg.total)}</div>
+            <div class="month-card-stat-label">Total Spent</div>
+          </div>
+          ${totalBudget > 0 ? `<div class="month-card-stat">
+            <div class="month-card-stat-value">${fmtShort(totalBudget)}</div>
+            <div class="month-card-stat-label">Budget</div>
+          </div>
+          <div class="month-card-stat">
+            <div class="month-card-stat-value${underBudget >= 0 ? ' green' : ''}">${fmtShort(Math.abs(underBudget))}</div>
+            <div class="month-card-stat-label">${underBudget >= 0 ? 'Under Budget' : 'Over Budget'}</div>
+          </div>` : ''}
+        </div>
       </div>`;
 
     // Group by date within month
@@ -542,8 +561,8 @@ function renderList() {
         const amtClass = isRefund ? ' refund' : '';
         const amtDisplay = isRefund ? '+' + fmtShort(Math.abs(e.amount)) : fmtShort(e.amount);
         let badges = '';
-        if (isRefund) badges += '<span class="refund-badge is-refund">Refund</span>';
-        if (isRefunded) badges += '<span class="refund-badge is-refunded">Refunded</span>';
+        if (isRefund) badges += '<span class="refund-badge is-refund">↩ Refund</span>';
+        if (isRefunded) badges += '<span class="refund-badge is-refunded">⛔ Refunded</span>';
         html += `<div class="txn-row${sel}" data-id="${e.id}" onclick="selectTxn(${e.id})">
           <div class="txn-left">
             <span class="txn-item">${escH(e.item)}</span>
@@ -596,7 +615,7 @@ function renderDetailView(e) {
       <span class="detail-header-title">Transaction${statusBadge}</span>
       <div class="detail-actions">
         ${showRefundBtn ? `<button class="btn-refund" onclick="openRefundModal()" title="Process refund">
-          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg> Refund
         </button>` : ''}
         <button class="btn-recurring" onclick="openRecurModal()" title="Make recurring bill">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
