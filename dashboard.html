@@ -305,7 +305,7 @@
     <div style="display:flex;align-items:center;gap:16px;">
     <button class="sync-tg-btn" id="syncTgBtn" onclick="syncTelegram()">
       <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-      Sync Telegram
+      Sync Messages
     </button>
     <div class="month-nav">
       <button onclick="changeMonth(-1)">&#8592;</button>
@@ -1146,7 +1146,7 @@ async function syncTelegram() {
   btn.classList.remove('syncing');
   btn.disabled = false;
   setTimeout(() => {
-    btn.innerHTML = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Sync Telegram';
+    btn.innerHTML = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Sync Messages';
   }, 3000);
 }
 

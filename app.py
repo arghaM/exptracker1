@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
 import db
+import gsheet
 import llm
 import telegram
 
@@ -83,6 +84,63 @@ async def sync_telegram_once() -> dict:
     return {"messages_processed": messages_processed, "expenses_added": expenses_added}
 
 
+async def sync_gsheet_once() -> dict:
+    """Fetch and process new messages from Google Sheet. Returns sync stats."""
+    sheet_id = os.getenv("GOOGLE_SHEET_ID", "")
+    if not sheet_id:
+        return {"error": "GOOGLE_SHEET_ID not set"}
+
+    last_row = int(db.get_setting("last_sheet_row", "0"))
+
+    messages_processed = 0
+    expenses_added = 0
+
+    try:
+        messages, new_last_row = gsheet.fetch_new_messages(sheet_id, last_row)
+    except Exception as e:
+        return {"error": f"Google Sheet read failed: {e}"}
+
+    db.set_setting("last_sheet_row", str(new_last_row))
+
+    for msg in messages:
+        if db.is_message_processed(msg["message_id"]):
+            continue
+        print(f"[GSheet Sync] Processing: {msg['text']}")
+        expenses = await llm.parse_expense(msg["text"])
+        print(f"[GSheet Sync] LLM returned {len(expenses)} expenses: {expenses}")
+        if not expenses:
+            print(f"[GSheet Sync] No expenses parsed, skipping")
+            db.mark_message_processed(msg["message_id"])
+            messages_processed += 1
+            continue
+        for i, exp in enumerate(expenses):
+            try:
+                override = db.get_category_override(exp["item"])
+                if override:
+                    print(f"[GSheet Sync] Category override: {exp['category']} → {override} for '{exp['item']}'")
+                    exp["category"] = override
+                db.insert_expense(
+                    date=msg["date"],
+                    raw_text=msg["text"],
+                    item=exp["item"],
+                    amount=exp["amount"],
+                    category=exp["category"],
+                    person=exp["person"],
+                    telegram_message_id=msg["message_id"] if i == 0 else None,
+                    notes=exp.get("notes", ""),
+                    account=exp.get("account", ""),
+                    status="pending",
+                )
+                expenses_added += 1
+                print(f"[GSheet Sync] Stored: {exp['item']} - {exp['amount']} ({exp['category']})")
+            except Exception as e:
+                print(f"[GSheet Sync] DB insert error: {e}")
+        db.mark_message_processed(msg["message_id"])
+        messages_processed += 1
+
+    return {"messages_processed": messages_processed, "expenses_added": expenses_added}
+
+
 @app.on_event("startup")
 async def startup():
     db.init_db()
@@ -90,8 +148,25 @@ async def startup():
 
 @app.post("/telegram/sync")
 async def telegram_sync():
+    """Sync messages. Uses Google Sheet if configured, falls back to Telegram."""
     try:
-        result = await sync_telegram_once()
+        sheet_id = os.getenv("GOOGLE_SHEET_ID", "")
+        if sheet_id:
+            result = await sync_gsheet_once()
+        else:
+            result = await sync_telegram_once()
+        if "error" in result:
+            return {"status": "error", **result}
+        return {"status": "ok", **result}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/gsheet/sync")
+async def gsheet_sync():
+    """Sync messages from Google Sheet explicitly."""
+    try:
+        result = await sync_gsheet_once()
         if "error" in result:
             return {"status": "error", **result}
         return {"status": "ok", **result}
