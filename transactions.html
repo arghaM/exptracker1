@@ -252,6 +252,31 @@
   .refund-btn-save { background: var(--green-600); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; font-family: var(--font); }
   .refund-btn-save:hover { background: var(--green-700); }
 
+  /* Split modal */
+  .split-modal { background: white; border-radius: 16px; padding: 28px; width: 440px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+  .split-modal h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); text-align: center; margin-bottom: 16px; }
+  .split-header { text-align: center; margin-bottom: 24px; }
+  .split-header-name { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  .split-header-amount { font-size: 16px; color: var(--text-secondary); margin-top: 4px; }
+  .split-rows { margin-bottom: 8px; }
+  .split-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f3f4f6; }
+  .split-row-amount { font-size: 18px; font-weight: 700; min-width: 80px; }
+  .split-row-amount input { width: 90px; border: none; border-bottom: 2px solid var(--border); font-size: 18px; font-weight: 700; font-family: var(--font); padding: 2px 0; text-align: left; background: none; }
+  .split-row-amount input:focus { outline: none; border-bottom-color: var(--blue-500); }
+  .split-row-cat { flex: 1; }
+  .split-row-cat select { border: none; background: none; font-size: 13px; font-weight: 600; font-family: var(--font); color: var(--text-primary); cursor: pointer; padding: 6px 10px; border-radius: 20px; appearance: none; -webkit-appearance: none; }
+  .split-cat-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; position: relative; }
+  .split-row-remove { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px; padding: 4px; border-radius: 6px; transition: all 0.15s; line-height: 1; }
+  .split-row-remove:hover { color: var(--red-500); background: var(--red-50); }
+  .split-add-btn { display: block; width: 100%; padding: 10px; border: none; background: none; color: var(--blue-600); font-size: 14px; font-weight: 500; cursor: pointer; font-family: var(--font); transition: background 0.1s; border-radius: 8px; }
+  .split-add-btn:hover { background: var(--blue-50); }
+  .split-error { color: var(--red-500); font-size: 12px; font-weight: 500; text-align: center; margin-top: 8px; min-height: 18px; }
+  .split-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+  .btn-split { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); font-size: 13px; font-weight: 500; }
+  .btn-split svg { width: 16px; height: 16px; }
+  .btn-split:hover { color: var(--blue-600); }
+
   @media (max-width: 900px) {
     .content-split { flex-direction: column; }
     .left-panel { flex: none; max-width: 100%; border-right: none; max-height: 60vh; }
@@ -389,6 +414,26 @@
     <div class="refund-actions">
       <button class="refund-btn-cancel" onclick="closeRefundModal()">Cancel</button>
       <button class="refund-btn-save" onclick="submitRefund()">Process Refund</button>
+    </div>
+  </div>
+</div>
+
+<!-- Split Modal -->
+<div class="modal-overlay" id="splitModal" onclick="if(event.target===this)closeSplitModal()">
+  <div class="split-modal">
+    <h3>Split Transaction</h3>
+    <div class="split-header">
+      <div class="split-header-name" id="splitName"></div>
+      <div class="split-header-amount" id="splitTotal"></div>
+    </div>
+    <div class="split-rows" id="splitRows"></div>
+    <button class="split-add-btn" onclick="addSplitRow()">+ add</button>
+    <div class="split-error" id="splitError"></div>
+    <div class="split-actions">
+      <button class="recur-btn-cancel" onclick="closeSplitModal()">Cancel</button>
+      <button class="recur-btn-save" onclick="submitSplit()" style="background:var(--blue-600)">
+        Save
+      </button>
     </div>
   </div>
 </div>
@@ -628,7 +673,10 @@ function renderDetailView(e) {
     <div class="detail-header">
       <span class="detail-header-title">Transaction${statusBadge}</span>
       <div class="detail-actions">
-        ${showRefundBtn ? `<button class="btn-refund" onclick="openRefundModal()" title="Process refund">
+        ${showRefundBtn ? `<button class="btn-split" onclick="openSplitModal()" title="Split transaction">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg> Split
+        </button>
+        <button class="btn-refund" onclick="openRefundModal()" title="Process refund">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg> Refund
         </button>` : ''}
         <button class="btn-recurring" onclick="openRecurModal()" title="Make recurring bill">
@@ -847,7 +895,7 @@ function closeDetail() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeCatPicker(); closeTagPicker(); closeDetail(); }
+  if (e.key === 'Escape') { closeCatPicker(); closeTagPicker(); closeSplitModal(); closeDetail(); }
 });
 
 // --- Category Picker ---
@@ -1241,6 +1289,142 @@ async function submitRefund() {
   if (data.status === 'ok') {
     await loadTransactions();
     selectTxn(selectedId);
+  } else {
+    alert('Error: ' + (data.error || 'Unknown error'));
+  }
+}
+
+// --- Split Modal ---
+let splitRows = [];
+let splitOriginalAmount = 0;
+
+function openSplitModal() {
+  const e = allExpenses.find(x => x.id === selectedId);
+  if (!e) return;
+  splitOriginalAmount = e.amount;
+
+  document.getElementById('splitName').textContent = e.item;
+  document.getElementById('splitTotal').textContent = fmt(e.amount);
+  document.getElementById('splitError').textContent = '';
+
+  // Start with one row having the full amount and original category
+  splitRows = [{ amount: e.amount, category: e.category }];
+  renderSplitRows();
+  document.getElementById('splitModal').classList.add('active');
+}
+
+function closeSplitModal() {
+  document.getElementById('splitModal').classList.remove('active');
+}
+
+function addSplitRow() {
+  // Calculate remaining
+  const used = splitRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const remaining = Math.max(0, round2(splitOriginalAmount - used));
+  const e = allExpenses.find(x => x.id === selectedId);
+  splitRows.push({ amount: remaining, category: e ? e.category : CATEGORIES[0] || '' });
+  renderSplitRows();
+  // Focus the new amount input
+  const inputs = document.querySelectorAll('#splitRows .split-amt-input');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+
+function removeSplitRow(idx) {
+  if (splitRows.length <= 1) return;
+  splitRows.splice(idx, 1);
+  // Recalc first row to absorb the difference
+  recalcFirstRow();
+  renderSplitRows();
+}
+
+function recalcFirstRow() {
+  const otherSum = splitRows.slice(1).reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  splitRows[0].amount = round2(splitOriginalAmount - otherSum);
+}
+
+function round2(n) { return Math.round(n * 100) / 100; }
+
+function onSplitAmountChange(idx, val) {
+  splitRows[idx].amount = parseFloat(val) || 0;
+  // Auto-adjust first row if editing other rows
+  if (idx > 0) {
+    recalcFirstRow();
+    // Update first row display without full re-render
+    const firstInput = document.querySelector('#splitRows .split-amt-input');
+    if (firstInput) firstInput.value = splitRows[0].amount;
+  }
+  validateSplit();
+}
+
+function onSplitCategoryChange(idx, val) {
+  splitRows[idx].category = val;
+}
+
+function validateSplit() {
+  const total = round2(splitRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0));
+  const errEl = document.getElementById('splitError');
+  if (Math.abs(total - splitOriginalAmount) > 0.01) {
+    const diff = round2(total - splitOriginalAmount);
+    errEl.textContent = `Total is ${fmt(total)} (${diff > 0 ? '+' : ''}${fmt(diff)} off)`;
+    return false;
+  }
+  for (const r of splitRows) {
+    if (!r.amount || r.amount <= 0) {
+      errEl.textContent = 'All amounts must be greater than 0';
+      return false;
+    }
+  }
+  errEl.textContent = '';
+  return true;
+}
+
+function renderSplitRows() {
+  const container = document.getElementById('splitRows');
+  container.innerHTML = splitRows.map((r, idx) => {
+    const meta = CAT_META[r.category] || { icon: '📋', color: '#94a3b8' };
+    const bg = meta.color + '18';
+    const catOptions = CATEGORIES.map(c => {
+      const m = CAT_META[c] || { icon: '📋', color: '#94a3b8' };
+      return `<option value="${escH(c)}"${c === r.category ? ' selected' : ''}>${m.icon} ${escH(c).toUpperCase()}</option>`;
+    }).join('');
+    const removeBtn = idx === 0 ? '' : `<button class="split-row-remove" onclick="removeSplitRow(${idx})" title="Remove">&times;</button>`;
+    return `<div class="split-row">
+      <div class="split-row-amount">
+        <input type="number" class="split-amt-input" value="${r.amount}" step="0.01" min="0.01"
+          oninput="onSplitAmountChange(${idx}, this.value)"
+          onblur="onSplitAmountChange(${idx}, this.value)">
+      </div>
+      <div class="split-row-cat">
+        <span class="split-cat-badge" style="background:${bg};color:${meta.color}">
+          <select onchange="onSplitCategoryChange(${idx}, this.value)" style="color:${meta.color};background:transparent;">${catOptions}</select>
+        </span>
+      </div>
+      ${removeBtn}
+    </div>`;
+  }).join('');
+  validateSplit();
+}
+
+async function submitSplit() {
+  if (!validateSplit()) return;
+  if (splitRows.length < 2) {
+    document.getElementById('splitError').textContent = 'Add at least one more split';
+    return;
+  }
+
+  const splits = splitRows.map(r => ({ amount: round2(parseFloat(r.amount)), category: r.category }));
+
+  const resp = await fetch(`/expenses/${selectedId}/split`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ splits })
+  });
+  const data = await resp.json();
+  closeSplitModal();
+
+  if (data.status === 'ok') {
+    await loadTransactions();
+    if (data.new_ids && data.new_ids.length) selectTxn(data.new_ids[0]);
   } else {
     alert('Error: ' + (data.error || 'Unknown error'));
   }

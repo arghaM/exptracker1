@@ -170,6 +170,13 @@ def init_db():
         except Exception:
             pass
 
+    # Migration: add need_want to categories (default 'want')
+    try:
+        conn.execute("ALTER TABLE categories ADD COLUMN need_want TEXT DEFAULT 'want'")
+        conn.commit()
+    except Exception:
+        pass
+
     # Create category_budgets table
     conn.execute("""
         CREATE TABLE IF NOT EXISTS category_budgets (
@@ -447,9 +454,12 @@ def get_all_overrides() -> list[dict]:
 def get_monthly_bar_data(months: int = 12) -> list[dict]:
     conn = get_connection()
     rows = conn.execute(
-        """SELECT strftime('%Y-%m', date) as month, SUM(amount) as total
-           FROM expenses
-           WHERE date >= date('now', ?) AND status = 'approved'
+        """SELECT strftime('%Y-%m', e.date) as month, SUM(e.amount) as total,
+           SUM(CASE WHEN c.need_want = 'need' THEN e.amount ELSE 0 END) as need_total,
+           SUM(CASE WHEN c.need_want != 'need' OR c.need_want IS NULL THEN e.amount ELSE 0 END) as want_total
+           FROM expenses e
+           LEFT JOIN categories c ON e.category = c.name
+           WHERE e.date >= date('now', ?) AND e.status = 'approved'
            GROUP BY month ORDER BY month""",
         (f"-{months} months",),
     ).fetchall()
@@ -943,7 +953,7 @@ def get_categories_with_spending(start: str, end: str) -> dict:
     """Return categories with spending and budget data for the categories page."""
     conn = get_connection()
     cats_rows = conn.execute(
-        "SELECT name, group_name, icon, color, excluded FROM categories ORDER BY name"
+        "SELECT name, group_name, icon, color, excluded, need_want FROM categories ORDER BY name"
     ).fetchall()
     spending_rows = conn.execute(
         """SELECT category, SUM(amount) as total, COUNT(*) as count
@@ -1000,7 +1010,7 @@ def get_category_detail(category: str) -> dict | None:
     """Full category detail for the right panel."""
     conn = get_connection()
     cat = conn.execute(
-        "SELECT name, group_name, icon, color, excluded FROM categories WHERE name = ?",
+        "SELECT name, group_name, icon, color, excluded, need_want FROM categories WHERE name = ?",
         (category,),
     ).fetchone()
     if not cat:
@@ -1082,7 +1092,7 @@ def get_category_transactions_grouped(category: str, months: int = 6) -> list[di
 
 
 def update_category_details(name: str, icon: str | None = None, color: str | None = None,
-                            excluded: bool | None = None):
+                            excluded: bool | None = None, need_want: str | None = None):
     conn = get_connection()
     if icon is not None:
         conn.execute("UPDATE categories SET icon = ? WHERE name = ?", (icon, name))
@@ -1090,6 +1100,8 @@ def update_category_details(name: str, icon: str | None = None, color: str | Non
         conn.execute("UPDATE categories SET color = ? WHERE name = ?", (color, name))
     if excluded is not None:
         conn.execute("UPDATE categories SET excluded = ? WHERE name = ?", (1 if excluded else 0, name))
+    if need_want is not None:
+        conn.execute("UPDATE categories SET need_want = ? WHERE name = ?", (need_want, name))
     conn.commit()
     conn.close()
 

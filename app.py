@@ -267,6 +267,7 @@ class CategoryDetailsUpdate(BaseModel):
     icon: Optional[str] = None
     color: Optional[str] = None
     excluded: Optional[bool] = None
+    need_want: Optional[str] = None
 
 
 @app.get("/categories")
@@ -343,7 +344,7 @@ def category_transactions_grouped(name: str, months: int = Query(6)):
 
 @app.put("/categories/{name}/details")
 def update_cat_details(name: str, body: CategoryDetailsUpdate):
-    db.update_category_details(name, body.icon, body.color, body.excluded)
+    db.update_category_details(name, body.icon, body.color, body.excluded, body.need_want)
     return {"status": "updated"}
 
 
@@ -437,6 +438,14 @@ def update_expense(expense_id: int, body: ExpenseUpdate):
     if body.tag_ids is not None:
         db.set_expense_tags(expense_id, body.tag_ids)
     return {"status": "updated", "id": expense_id}
+
+
+@app.get("/expenses/{expense_id}")
+def get_expense(expense_id: int):
+    expense = db.get_expense_by_id(expense_id)
+    if not expense:
+        return {"error": "Not found"}
+    return expense
 
 
 @app.get("/expenses/{expense_id}/linked")
@@ -791,6 +800,57 @@ def refund_expense(expense_id: int, body: RefundRequest):
         return {"status": "ok", "refund_id": refund_id}
     except ValueError as e:
         return {"status": "error", "error": str(e)}
+
+
+class SplitItem(BaseModel):
+    amount: float
+    category: str
+
+
+class SplitRequest(BaseModel):
+    splits: List[SplitItem]
+
+
+@app.post("/expenses/{expense_id}/split")
+def split_expense(expense_id: int, body: SplitRequest):
+    original = db.get_expense_by_id(expense_id)
+    if not original:
+        return {"status": "error", "error": "Transaction not found"}
+
+    if len(body.splits) < 2:
+        return {"status": "error", "error": "Need at least 2 splits"}
+
+    total = round(sum(s.amount for s in body.splits), 2)
+    if abs(total - original["amount"]) > 0.01:
+        return {"status": "error", "error": f"Split total {total} != original {original['amount']}"}
+
+    # Get tags from original
+    tags_map = db.get_tags_for_expenses([expense_id])
+    original_tag_ids = [t["id"] for t in tags_map.get(expense_id, [])]
+
+    # Delete the original
+    db.discard_expense(expense_id)
+
+    # Create new transactions for each split
+    new_ids = []
+    for s in body.splits:
+        new_id = db.insert_expense(
+            date=original["date"],
+            raw_text=original.get("raw_text") or "split",
+            item=original["item"],
+            amount=s.amount,
+            category=s.category,
+            person=original.get("person"),
+            telegram_message_id=None,
+            notes=original.get("notes") or "",
+            account=original.get("account") or "",
+            status="approved",
+        )
+        if original_tag_ids:
+            db.set_expense_tags(new_id, original_tag_ids)
+        new_ids.append(new_id)
+
+    return {"status": "ok", "new_ids": new_ids}
 
 
 class TagCreate(BaseModel):

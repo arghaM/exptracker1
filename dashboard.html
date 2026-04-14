@@ -399,7 +399,7 @@
               <input type="checkbox" id="pieToggle" onchange="renderPieLegend()">
               <span class="toggle-slider"></span>
             </label>
-            <span class="toggle-label">\u20B9</span>
+            <span class="toggle-label">₹</span>
           </div>
         </div>
       </div>
@@ -711,7 +711,7 @@ async function loadLineChart() {
           ticks: {
             font: { family: 'Inter', size: 11 },
             color: '#9ca3af',
-            callback: v => '\u20B9' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v),
+            callback: v => '\u20B9' + Number(v).toLocaleString('en-IN'),
           },
         },
         x: {
@@ -973,9 +973,10 @@ async function showMonthlyChart() {
     const [y, m] = d.month.split('-');
     return new Date(y, m - 1).toLocaleString('default', { month: 'short', year: '2-digit' });
   });
-  const values = data.data.map(d => d.total);
+  const needValues = data.data.map(d => d.need_total || 0);
+  const wantValues = data.data.map(d => d.want_total || 0);
   const rawMonths = data.data.map(d => d.month);
-  renderChart(labels, values, rawMonths);
+  renderChart(labels, needValues, wantValues, rawMonths);
 }
 
 async function drillDown(yearMonth) {
@@ -989,26 +990,43 @@ async function drillDown(yearMonth) {
   const data = await resp.json();
   const labels = data.data.map(d => `Week ${d.week_num}`);
   const values = data.data.map(d => d.total);
-  renderChart(labels, values, null);
+  renderChart(labels, values, null, null);
 }
 
-function renderChart(labels, values, rawMonths) {
+function renderChart(labels, needOrValues, wantValues, rawMonths) {
   const ctx = document.getElementById('barChart').getContext('2d');
   if (barChart) barChart.destroy();
 
+  const isStacked = wantValues !== null;
+  const datasets = isStacked ? [
+    {
+      label: 'Need',
+      data: needOrValues,
+      backgroundColor: '#3b82f6',
+      hoverBackgroundColor: '#2563eb',
+      borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 6, bottomRight: 6 },
+      maxBarThickness: 48,
+    },
+    {
+      label: 'Want',
+      data: wantValues,
+      backgroundColor: '#f59e0b',
+      hoverBackgroundColor: '#d97706',
+      borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+      maxBarThickness: 48,
+    }
+  ] : [{
+    label: 'Expenses',
+    data: needOrValues,
+    backgroundColor: '#22c55e',
+    hoverBackgroundColor: '#16a34a',
+    borderRadius: 6,
+    maxBarThickness: 48,
+  }];
+
   barChart = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Expenses',
-        data: values,
-        backgroundColor: '#22c55e',
-        hoverBackgroundColor: '#16a34a',
-        borderRadius: 6,
-        maxBarThickness: 48,
-      }]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -1018,7 +1036,7 @@ function renderChart(labels, values, rawMonths) {
         }
       },
       plugins: {
-        legend: { display: false },
+        legend: { display: isStacked, position: 'top', labels: { boxWidth: 12, boxHeight: 12, borderRadius: 3, useBorderRadius: true, padding: 16, font: { family: 'Inter', size: 12, weight: '500' } } },
         tooltip: {
           backgroundColor: '#1b1f2a',
           titleFont: { family: 'Inter', weight: '600' },
@@ -1026,22 +1044,28 @@ function renderChart(labels, values, rawMonths) {
           padding: 10,
           cornerRadius: 8,
           callbacks: {
-            label: ctx => '\u20B9' + Number(ctx.raw).toLocaleString('en-IN')
+            label: ctx => ctx.dataset.label + ': \u20B9' + Number(ctx.raw).toLocaleString('en-IN'),
+            footer: isStacked ? (items) => {
+              const total = items.reduce((s, i) => s + i.raw, 0);
+              return 'Total: \u20B9' + Number(total).toLocaleString('en-IN');
+            } : undefined
           }
         }
       },
       scales: {
         y: {
           beginAtZero: true,
+          stacked: isStacked,
           grid: { color: '#f3f4f6' },
           border: { display: false },
           ticks: {
             font: { family: 'Inter', size: 11 },
             color: '#9ca3af',
-            callback: v => '\u20B9' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v)
+            callback: v => '\u20B9' + Number(v).toLocaleString('en-IN')
           }
         },
         x: {
+          stacked: isStacked,
           grid: { display: false },
           border: { display: false },
           ticks: { font: { family: 'Inter', size: 11 }, color: '#9ca3af' }
