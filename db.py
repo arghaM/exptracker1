@@ -247,15 +247,17 @@ def init_db():
 
 def insert_expense(date: str, raw_text: str, item: str, amount: float,
                    category: str, person: str | None, telegram_message_id: int | None,
-                   notes: str = "", account: str = "", status: str = "approved"):
+                   notes: str = "", account: str = "", status: str = "approved") -> int:
     conn = get_connection()
-    conn.execute(
+    cur = conn.execute(
         """INSERT INTO expenses (date, raw_text, item, amount, category, person, telegram_message_id, notes, account, status)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (date, raw_text, item, amount, category, person, telegram_message_id, notes, account, status),
     )
+    expense_id = cur.lastrowid
     conn.commit()
     conn.close()
+    return expense_id
 
 
 def get_pending_expenses() -> list[dict]:
@@ -270,6 +272,13 @@ def get_pending_expenses() -> list[dict]:
 def approve_expense(id: int):
     conn = get_connection()
     conn.execute("UPDATE expenses SET status = 'approved' WHERE id = ?", (id,))
+    conn.commit()
+    conn.close()
+
+
+def discard_expense(id: int):
+    conn = get_connection()
+    conn.execute("UPDATE expenses SET status = 'discarded' WHERE id = ?", (id,))
     conn.commit()
     conn.close()
 
@@ -1266,6 +1275,13 @@ def create_refund(original_id: int, amount: float) -> int:
     conn.commit()
     conn.close()
     return refund_id
+
+
+def get_expense_by_id(expense_id: int) -> dict | None:
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM expenses WHERE id = ?", (expense_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def get_refund_for(expense_id: int) -> dict | None:

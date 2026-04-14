@@ -54,7 +54,7 @@
 
   /* Split layout */
   .content-split { display: flex; flex: 1; overflow: hidden; }
-  .left-panel { flex: 0 0 60%; max-width: 60%; overflow-y: auto; padding: 24px 24px 24px 32px; border-right: 1px solid var(--border); }
+  .left-panel { flex: 0 0 60%; max-width: 60%; overflow-y: auto; padding: 24px 24px 24px 32px; border-right: 1px solid var(--border); position: relative; }
   .right-panel { flex: 1; overflow-y: auto; background: white; }
 
   /* Summary card */
@@ -202,6 +202,11 @@
   .group-body.collapsed { max-height: 0 !important; }
   .group-children { padding-left: 12px; border-left: 2px solid #f1f5f9; margin-left: 12px; }
 
+  /* Collapse/expand all toggle */
+  .collapse-all-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 11px; font-weight: 600; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s; margin-left: auto; margin-right: 8px; }
+  .collapse-all-btn:hover { background: var(--blue-50); color: var(--blue-600); border-color: var(--blue-500); }
+  .collapse-all-btn svg { width: 12px; height: 12px; }
+
   /* Group modal */
   .group-modal-list { max-height: 240px; overflow-y: auto; margin-bottom: 12px; }
   .group-modal-item { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; transition: background 0.1s; }
@@ -219,8 +224,9 @@
   .query-toggle:hover { background: var(--blue-50); color: var(--blue-600); border-color: var(--blue-500); }
   .query-toggle.active { background: var(--blue-600); color: white; border-color: var(--blue-600); }
   .query-toggle svg { width: 14px; height: 14px; }
-  .query-box { display: none; background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%); border: 2px dashed var(--blue-500); border-radius: 14px; padding: 20px; margin-bottom: 20px; transition: all 0.2s; }
+  .query-box { display: none; background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%); border: 2px dashed var(--blue-500); border-radius: 14px; padding: 20px; margin-bottom: 20px; transition: box-shadow 0.2s, border-radius 0.2s; }
   .query-box.visible { display: block; }
+  .query-box.floating { position: fixed; z-index: 100; border-radius: 0 0 14px 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); border-top: none; }
   .query-box.drag-over { background: linear-gradient(135deg, #dbeafe 0%, #e0f2fe 100%); border-color: var(--blue-700); transform: scale(1.01); }
   .query-box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .query-box-title { font-size: 14px; font-weight: 600; color: var(--blue-700); display: flex; align-items: center; gap: 8px; }
@@ -336,6 +342,10 @@
         <div class="cat-section-header" onclick="toggleSection('regular')">
           <svg class="cat-arrow open" id="arrowRegular" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
           <span class="cat-section-title">Regular categories</span>
+          <button class="collapse-all-btn" id="collapseAllBtn" onclick="event.stopPropagation();toggleAllGroups()" title="Collapse/expand all groups">
+            <svg id="collapseAllIcon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            <span id="collapseAllLabel">Collapse</span>
+          </button>
           <span class="cat-col-label cat-col-spent">SPENT</span>
           <span class="cat-col-label" style="width:160px"></span>
           <span class="cat-col-label cat-col-budget">BUDGET</span>
@@ -653,6 +663,7 @@ function renderCategoryList(containerId, categories) {
   }
 
   container.innerHTML = html;
+  if (containerId === 'regularBody') updateCollapseAllBtn();
 }
 
 function toggleGroup(gName) {
@@ -665,6 +676,58 @@ function toggleGroup(gName) {
   if (header) {
     const arrow = header.querySelector('.group-arrow');
     if (arrow) arrow.classList.toggle('open');
+  }
+  updateCollapseAllBtn();
+}
+
+function toggleAllGroups() {
+  // Smart: if any group is collapsed → expand all; otherwise collapse all
+  const groupBodies = document.querySelectorAll('#regularBody .group-body');
+  if (!groupBodies.length) return;
+  const anyCollapsed = Array.from(groupBodies).some(el => el.classList.contains('collapsed'));
+  const shouldExpand = anyCollapsed;
+
+  groupBodies.forEach(el => {
+    const gName = el.id.replace('grp_', '').replace(/_/g, ' ');
+    // Find the actual group name from collapsedGroups keys
+    const header = el.previousElementSibling;
+    const arrow = header ? header.querySelector('.group-arrow') : null;
+
+    if (shouldExpand) {
+      el.classList.remove('collapsed');
+      if (arrow) arrow.classList.add('open');
+    } else {
+      el.classList.add('collapsed');
+      if (arrow) arrow.classList.remove('open');
+    }
+  });
+
+  // Update collapsedGroups state
+  const allGroupNames = Object.keys(collapsedGroups);
+  // Also find group names from DOM
+  document.querySelectorAll('#regularBody .group-header .group-name').forEach(el => {
+    collapsedGroups[el.textContent] = !shouldExpand;
+  });
+
+  updateCollapseAllBtn();
+}
+
+function updateCollapseAllBtn() {
+  const groupBodies = document.querySelectorAll('#regularBody .group-body');
+  if (!groupBodies.length) {
+    document.getElementById('collapseAllBtn').style.display = 'none';
+    return;
+  }
+  document.getElementById('collapseAllBtn').style.display = '';
+  const anyCollapsed = Array.from(groupBodies).some(el => el.classList.contains('collapsed'));
+  const label = document.getElementById('collapseAllLabel');
+  const icon = document.getElementById('collapseAllIcon');
+  if (anyCollapsed) {
+    label.textContent = 'Expand';
+    icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"/>';
+  } else {
+    label.textContent = 'Collapse';
+    icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>';
   }
 }
 
@@ -1116,21 +1179,26 @@ function toggleQueryMode() {
     btn.classList.add('active');
     box.classList.add('visible');
     body.classList.add('query-mode-active');
+    setupQueryScroll();
   } else {
     btn.classList.remove('active');
-    box.classList.remove('visible');
+    box.classList.remove('visible', 'floating');
     body.classList.remove('query-mode-active');
     queryItems = [];
     renderQueryItems();
+    teardownQueryScroll();
   }
 }
 
 function clearQueryMode() {
   queryItems = [];
   queryMode = false;
+  const box = document.getElementById('queryBox');
   document.getElementById('queryToggleBtn').classList.remove('active');
-  document.getElementById('queryBox').classList.remove('visible');
+  box.classList.remove('visible', 'floating');
+  box.style.cssText = '';
   document.body.classList.remove('query-mode-active');
+  teardownQueryScroll();
   renderQueryItems();
 }
 
@@ -1282,6 +1350,79 @@ async function handleBackupImport(input) {
   } catch (e) {
     status.style.color = 'var(--red-500)';
     status.textContent = 'Error: ' + e.message;
+  }
+}
+
+// --- Query Box Floating on Scroll ---
+let queryScrollHandler = null;
+let queryPlaceholder = null;
+
+function setupQueryScroll() {
+  const panel = document.querySelector('.left-panel');
+  const box = document.getElementById('queryBox');
+  if (!panel || !box) return;
+
+  // Create a placeholder to keep layout space when box goes floating
+  if (!queryPlaceholder) {
+    queryPlaceholder = document.createElement('div');
+    queryPlaceholder.id = 'queryPlaceholder';
+    queryPlaceholder.style.display = 'none';
+    box.parentNode.insertBefore(queryPlaceholder, box.nextSibling);
+  }
+
+  queryScrollHandler = function() {
+    if (!queryMode) return;
+    const panelRect = panel.getBoundingClientRect();
+    const boxNaturalTop = panelRect.top + panel.scrollTop === panel.scrollTop
+      ? panelRect.top : panelRect.top;
+
+    // Check if the box has scrolled out of view
+    if (panel.scrollTop > 10) {
+      if (!box.classList.contains('floating')) {
+        // Capture current dimensions before going floating
+        const boxRect = box.getBoundingClientRect();
+        queryPlaceholder.style.height = boxRect.height + 'px';
+        queryPlaceholder.style.marginBottom = '20px';
+        queryPlaceholder.style.display = 'block';
+
+        box.classList.add('floating');
+        box.style.top = panelRect.top + 'px';
+        box.style.left = panelRect.left + 'px';
+        box.style.width = panelRect.width + 'px';
+      } else {
+        // Update position in case panel moved
+        box.style.top = panelRect.top + 'px';
+        box.style.left = panelRect.left + 'px';
+        box.style.width = panelRect.width + 'px';
+      }
+    } else {
+      if (box.classList.contains('floating')) {
+        box.classList.remove('floating');
+        box.style.cssText = '';
+        queryPlaceholder.style.display = 'none';
+      }
+    }
+  };
+
+  panel.addEventListener('scroll', queryScrollHandler);
+  // Also update on resize
+  window.addEventListener('resize', queryScrollHandler);
+}
+
+function teardownQueryScroll() {
+  const panel = document.querySelector('.left-panel');
+  const box = document.getElementById('queryBox');
+  if (queryScrollHandler && panel) {
+    panel.removeEventListener('scroll', queryScrollHandler);
+    window.removeEventListener('resize', queryScrollHandler);
+  }
+  queryScrollHandler = null;
+  if (box) {
+    box.classList.remove('floating');
+    box.style.cssText = '';
+  }
+  if (queryPlaceholder) {
+    queryPlaceholder.style.display = 'none';
   }
 }
 

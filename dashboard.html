@@ -303,6 +303,10 @@
   <div class="topbar">
     <h2>Dashboard</h2>
     <div style="display:flex;align-items:center;gap:16px;">
+    <button class="sync-tg-btn" style="background:var(--green-600);" onclick="openAddModal()">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+      Add
+    </button>
     <button class="sync-tg-btn" id="syncTgBtn" onclick="syncTelegram()">
       <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
       Sync Messages
@@ -334,6 +338,7 @@
             <span class="stat-item-value" id="topCategory">--</span>
           </div>
         </div>
+        <div id="lastSyncInfo" style="margin-top:8px;font-size:11px;color:var(--text-muted);"></div>
       </div>
       <div class="dash-card">
         <div class="dash-card-header">
@@ -484,9 +489,38 @@
       </div>
       <label>Notes <input type="text" id="reviewEditNotes"></label>
     </div>
+    <div class="review-edit-footer" style="justify-content:space-between;">
+      <button class="review-edit-cancel" onclick="discardExpense()" style="color:#ef4444;">Discard</button>
+      <div style="display:flex;gap:8px;">
+        <button class="review-edit-cancel" onclick="closeReviewEdit()">Cancel</button>
+        <button class="review-edit-save" onclick="saveAndApprove()">Save & Approve</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Transaction Modal -->
+<div class="review-edit-overlay" id="addModal">
+  <div class="review-edit-modal">
+    <div class="review-edit-header">
+      <h3>Add Transaction</h3>
+      <button class="close-btn" onclick="closeAddModal()" style="background:none;border:none;font-size:20px;color:var(--text-muted);cursor:pointer;">&times;</button>
+    </div>
+    <div class="review-edit-body">
+      <label>Item <input type="text" id="addItem" placeholder="e.g. Groceries"></label>
+      <div class="review-edit-row">
+        <label>Amount <input type="number" id="addAmount" step="0.01" placeholder="0.00"></label>
+        <label>Date <input type="date" id="addDate"></label>
+      </div>
+      <div class="review-edit-row">
+        <label>Category <select id="addCategory"></select></label>
+        <label>Account <input type="text" id="addAccount" placeholder="Optional"></label>
+      </div>
+      <label>Notes <input type="text" id="addNotes" placeholder="Optional"></label>
+    </div>
     <div class="review-edit-footer">
-      <button class="review-edit-cancel" onclick="closeReviewEdit()">Cancel</button>
-      <button class="review-edit-save" onclick="saveAndApprove()">Save & Approve</button>
+      <button class="review-edit-cancel" onclick="closeAddModal()">Cancel</button>
+      <button class="review-edit-save" onclick="saveNewExpense()">Add Transaction</button>
     </div>
   </div>
 </div>
@@ -508,6 +542,7 @@ async function init() {
   loadPieChart();
   loadChart();
   loadReviewQueue();
+  loadLastSync();
 }
 
 function updateMonthLabel() {
@@ -922,7 +957,7 @@ document.getElementById('drillModal').addEventListener('click', (e) => {
 });
 // Close on Escape
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { closeDrillModal(); closeReviewEdit(); }
+  if (e.key === 'Escape') { closeDrillModal(); closeReviewEdit(); closeAddModal(); }
 });
 
 async function loadChart() { showMonthlyChart(); }
@@ -1137,6 +1172,7 @@ async function syncTelegram() {
       btn.innerHTML = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> ' + data.expenses_added + ' new';
       loadReviewQueue();
       loadExpenses();
+      loadLastSync();
     } else {
       btn.textContent = 'Error: ' + (data.error || 'Unknown');
     }
@@ -1268,6 +1304,93 @@ async function saveAndApprove() {
   loadExpenses();
   loadPieChart();
   loadLineChart();
+}
+
+// --- Last Sync ---
+async function loadLastSync() {
+  try {
+    const resp = await fetch('/sync/status');
+    const data = await resp.json();
+    const el = document.getElementById('lastSyncInfo');
+    if (data.last_sync_at) {
+      const d = new Date(data.last_sync_at);
+      const now = new Date();
+      const diffMs = now - d;
+      const diffMins = Math.floor(diffMs / 60000);
+      let ago;
+      if (diffMins < 1) ago = 'just now';
+      else if (diffMins < 60) ago = diffMins + 'm ago';
+      else if (diffMins < 1440) ago = Math.floor(diffMins / 60) + 'h ago';
+      else ago = Math.floor(diffMins / 1440) + 'd ago';
+      el.textContent = 'Last synced ' + ago + ' \u2022 ' + d.toLocaleDateString('en-IN', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+    } else {
+      el.textContent = 'Never synced';
+    }
+  } catch(e) {}
+}
+
+// --- Discard ---
+async function discardExpense() {
+  const id = document.getElementById('reviewEditId').value;
+  if (!id) return;
+  if (!confirm('Discard this transaction? It will be permanently removed from the review queue.')) return;
+  await fetch('/expenses/' + id + '/discard', { method: 'PUT' });
+  closeReviewEdit();
+  loadReviewQueue();
+}
+
+// --- Add Transaction ---
+async function openAddModal() {
+  if (allCategories.length === 0) {
+    const resp = await fetch('/categories');
+    const data = await resp.json();
+    allCategories = data.categories || [];
+  }
+  document.getElementById('addItem').value = '';
+  document.getElementById('addAmount').value = '';
+  document.getElementById('addDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('addAccount').value = '';
+  document.getElementById('addNotes').value = '';
+  const sel = document.getElementById('addCategory');
+  sel.innerHTML = allCategories.map(c =>
+    `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`
+  ).join('');
+  document.getElementById('addModal').classList.add('active');
+}
+
+function closeAddModal() {
+  document.getElementById('addModal').classList.remove('active');
+}
+
+document.getElementById('addModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('addModal')) closeAddModal();
+});
+
+async function saveNewExpense() {
+  const item = document.getElementById('addItem').value.trim();
+  const amount = parseFloat(document.getElementById('addAmount').value);
+  const date = document.getElementById('addDate').value;
+  const category = document.getElementById('addCategory').value;
+  if (!item || !amount || !date || !category) { alert('Please fill in all required fields.'); return; }
+
+  const resp = await fetch('/expenses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      item,
+      amount,
+      date,
+      category,
+      account: document.getElementById('addAccount').value,
+      notes: document.getElementById('addNotes').value,
+    })
+  });
+  if (resp.ok) {
+    closeAddModal();
+    loadExpenses();
+    loadPieChart();
+    loadLineChart();
+  }
 }
 
 init();

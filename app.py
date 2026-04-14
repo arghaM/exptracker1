@@ -81,6 +81,7 @@ async def sync_telegram_once() -> dict:
         db.mark_message_processed(msg["message_id"])
         messages_processed += 1
 
+    db.set_setting("last_sync_at", datetime.now().isoformat())
     return {"messages_processed": messages_processed, "expenses_added": expenses_added}
 
 
@@ -138,6 +139,7 @@ async def sync_gsheet_once() -> dict:
         db.mark_message_processed(msg["message_id"])
         messages_processed += 1
 
+    db.set_setting("last_sync_at", datetime.now().isoformat())
     return {"messages_processed": messages_processed, "expenses_added": expenses_added}
 
 
@@ -366,6 +368,12 @@ def health():
 
 # --- Expenses ---
 
+@app.get("/sync/status")
+def sync_status():
+    last_sync = db.get_setting("last_sync_at", "")
+    return {"last_sync_at": last_sync}
+
+
 @app.get("/expenses")
 def list_expenses(
     start: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
@@ -378,6 +386,32 @@ def list_expenses(
         end = "2099-12-31"
     expenses = db.get_expenses_by_date_range(start, end)
     return {"expenses": expenses[:limit], "total": len(expenses)}
+
+
+class ExpenseCreate(BaseModel):
+    date: str
+    item: str
+    amount: float
+    category: str
+    notes: str = ""
+    account: str = ""
+
+
+@app.post("/expenses")
+def create_expense(body: ExpenseCreate):
+    expense_id = db.insert_expense(
+        date=body.date,
+        raw_text="manual",
+        item=body.item,
+        amount=body.amount,
+        category=body.category,
+        person=None,
+        telegram_message_id=None,
+        notes=body.notes,
+        account=body.account,
+        status="approved",
+    )
+    return {"status": "created", "id": expense_id}
 
 
 @app.get("/expenses/pending")
@@ -405,10 +439,32 @@ def update_expense(expense_id: int, body: ExpenseUpdate):
     return {"status": "updated", "id": expense_id}
 
 
+@app.get("/expenses/{expense_id}/linked")
+def get_linked_transaction(expense_id: int):
+    expense = db.get_expense_by_id(expense_id)
+    if not expense:
+        return {"parent": None, "refund": None}
+    result = {"parent": None, "refund": None}
+    # If this is a refund, fetch the parent
+    if expense.get("refund_of"):
+        result["parent"] = db.get_expense_by_id(expense["refund_of"])
+    # If this is an original, fetch the refund child
+    refund = db.get_refund_for(expense_id)
+    if refund:
+        result["refund"] = refund
+    return result
+
+
 @app.put("/expenses/{expense_id}/approve")
 def approve_expense(expense_id: int):
     db.approve_expense(expense_id)
     return {"status": "approved", "id": expense_id}
+
+
+@app.put("/expenses/{expense_id}/discard")
+def discard_expense(expense_id: int):
+    db.discard_expense(expense_id)
+    return {"status": "discarded", "id": expense_id}
 
 
 # --- Category Overrides ---
