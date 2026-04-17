@@ -485,6 +485,11 @@ def list_overrides():
 
 # --- Chart Data ---
 
+@app.get("/reports/need-want-breakdown")
+def need_want_breakdown(start: str = Query(...), end: str = Query(...)):
+    return db.get_need_want_breakdown(start, end)
+
+
 @app.get("/reports/chart/monthly")
 def chart_monthly(months: int = Query(12, ge=1, le=36)):
     return {"data": db.get_monthly_bar_data(months)}

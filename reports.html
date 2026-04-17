@@ -124,6 +124,30 @@
   .chart-center-total { font-size: 20px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.5px; }
   .chart-center-sub { font-size: 11px; color: var(--text-muted); font-weight: 500; }
 
+  /* Need/Want breakdown modal */
+  .nw-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+  .nw-modal-overlay.active { display: flex; }
+  .nw-modal { background: white; border-radius: 16px; padding: 28px; width: 480px; max-width: 95vw; max-height: 80vh; box-shadow: 0 20px 60px rgba(0,0,0,0.15); display: flex; flex-direction: column; }
+  .nw-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .nw-modal-header h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px; }
+  .nw-modal-header .nw-badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 10px; border-radius: 12px; }
+  .nw-modal-header .nw-badge.need { background: var(--blue-50); color: var(--blue-700); }
+  .nw-modal-header .nw-badge.want { background: #fef3c7; color: #92400e; }
+  .nw-modal-close { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 20px; padding: 4px; }
+  .nw-modal-total { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; }
+  .nw-modal-total span { font-weight: 700; color: var(--text-primary); font-size: 18px; }
+  .nw-cat-list { overflow-y: auto; flex: 1; }
+  .nw-cat-row { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid #f3f4f6; }
+  .nw-cat-row:last-child { border-bottom: none; }
+  .nw-cat-icon { font-size: 18px; width: 24px; text-align: center; flex-shrink: 0; }
+  .nw-cat-info { flex: 1; min-width: 0; }
+  .nw-cat-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nw-cat-count { font-size: 11px; color: var(--text-muted); }
+  .nw-cat-bar-wrap { width: 80px; height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+  .nw-cat-bar-fill { height: 100%; border-radius: 3px; }
+  .nw-cat-amount { font-size: 14px; font-weight: 700; white-space: nowrap; min-width: 80px; text-align: right; }
+  .nw-cat-pct { font-size: 11px; color: var(--text-muted); width: 40px; text-align: right; flex-shrink: 0; }
+
   @media (max-width: 768px) {
     .sidebar { display: none; }
     .main { margin-left: 0; }
@@ -184,6 +208,7 @@
       <select class="filter-select" id="groupBySelect" onchange="loadReport()">
         <option value="category">By Category</option>
         <option value="group">By Group</option>
+        <option value="needwant">Need vs Want</option>
       </select>
       <button class="filter-dd-apply" onclick="loadReport()">Apply</button>
       <button class="export-btn" id="exportPdfBtn" onclick="exportPDF()">
@@ -287,6 +312,18 @@
   </div>
 </div>
 
+<!-- Need/Want Breakdown Modal -->
+<div class="nw-modal-overlay" id="nwModal" onclick="if(event.target===this)closeNwModal()">
+  <div class="nw-modal">
+    <div class="nw-modal-header">
+      <h3><span class="nw-badge" id="nwModalBadge"></span> <span id="nwModalTitle"></span></h3>
+      <button class="nw-modal-close" onclick="closeNwModal()">&times;</button>
+    </div>
+    <div class="nw-modal-total" id="nwModalTotal"></div>
+    <div class="nw-cat-list" id="nwModalList"></div>
+  </div>
+</div>
+
 <script>
 const PIE_COLORS = ['#3b82f6','#22c55e','#f59e0b','#8b5cf6','#14b8a6','#f97316','#ef4444','#ec4899','#06b6d4','#84cc16','#64748b','#0ea5e9','#a855f7','#f43f5e','#10b981','#d946ef','#6366f1','#eab308','#78716c','#0891b2'];
 
@@ -303,6 +340,7 @@ let selectedTags = new Set();
 let selectedAccounts = new Set();
 
 let pieChart = null;
+let needWantData = null;
 
 function fmt(amount) {
   return '\u20B9' + Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -430,12 +468,13 @@ async function loadReport() {
   if (!start || !end) return;
 
   // Fetch all data in parallel
-  const [expResp, metaResp, groupResp, tagResp, accResp] = await Promise.all([
+  const [expResp, metaResp, groupResp, tagResp, accResp, nwResp] = await Promise.all([
     fetch(`/expenses?start=${start}&end=${end}&limit=500`),
     fetch('/categories/meta'),
     fetch('/categories?grouped=true'),
     fetch('/tags'),
     fetch(`/reports/accounts?start=${start}&end=${end}`),
+    fetch(`/reports/need-want-breakdown?start=${start}&end=${end}`),
   ]);
 
   const expData = await expResp.json();
@@ -443,6 +482,7 @@ async function loadReport() {
   const groupData = await groupResp.json();
   const tagData = await tagResp.json();
   const accData = await accResp.json();
+  needWantData = await nwResp.json();
 
   allExpenses = expData.expenses || [];
   allTags = tagData.tags || [];
@@ -539,12 +579,19 @@ function formatDatePretty(dateStr) {
 function renderChart() {
   const groupBy = document.getElementById('groupBySelect').value;
   const isGroup = groupBy === 'group';
-  document.getElementById('chartTitle').textContent = isGroup ? 'Spending by Group' : 'Spending by Category';
+  const isNeedWant = groupBy === 'needwant';
+
+  document.getElementById('chartTitle').textContent = isNeedWant ? 'Need vs Want' : isGroup ? 'Spending by Group' : 'Spending by Category';
 
   // Date range display
   const start = document.getElementById('startDate').value;
   const end = document.getElementById('endDate').value;
   document.getElementById('chartDateRange').textContent = `${formatDatePretty(start)} — ${formatDatePretty(end)}`;
+
+  if (isNeedWant) {
+    renderNeedWantChart();
+    return;
+  }
 
   // Aggregate
   const totals = {};
@@ -614,6 +661,116 @@ function renderChart() {
     }
   });
 }
+
+function renderNeedWantChart() {
+  if (!needWantData) return;
+  const nw = needWantData;
+  const grandTotal = nw.need.total + nw.want.total;
+
+  document.getElementById('chartCenterTotal').textContent = fmt(grandTotal);
+
+  const labels = ['Need', 'Want'];
+  const values = [nw.need.total, nw.want.total];
+  const colors = ['#3b82f6', '#f59e0b'];
+
+  // Legend
+  const legendEl = document.getElementById('chartLegend');
+  const items = [
+    { label: 'Need', total: nw.need.total, color: '#3b82f6', count: nw.need.categories.length },
+    { label: 'Want', total: nw.want.total, color: '#f59e0b', count: nw.want.categories.length },
+  ];
+  legendEl.innerHTML = items.map(item => {
+    const pct = grandTotal > 0 ? ((item.total / grandTotal) * 100).toFixed(1) : '0';
+    return `<div class="legend-item" style="cursor:pointer;padding:10px 8px;border-radius:10px;margin-bottom:4px;border:1px solid #f1f5f9;" onclick="openNwModal('${item.label.toLowerCase()}')">
+      <span class="legend-dot" style="background:${item.color};width:12px;height:12px;"></span>
+      <span class="legend-name" style="font-size:14px;font-weight:600;color:var(--text-primary);">${item.label}</span>
+      <span style="font-size:11px;color:var(--text-muted);margin-right:4px;">${item.count} categories</span>
+      <span class="legend-val">${fmt(item.total)}</span>
+      <span class="legend-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  // Chart
+  if (pieChart) pieChart.destroy();
+  const ctx = document.getElementById('pieChart').getContext('2d');
+  pieChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderWidth: 3,
+        borderColor: '#ffffff',
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      cutout: '60%',
+      onClick: (e, elements) => {
+        if (elements.length > 0) {
+          const idx = elements[0].index;
+          openNwModal(idx === 0 ? 'need' : 'want');
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const pct = grandTotal > 0 ? ((ctx.parsed / grandTotal) * 100).toFixed(1) : '0';
+              return ` ${ctx.label}: ${fmt(ctx.parsed)} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function openNwModal(type) {
+  if (!needWantData) return;
+  const data = type === 'need' ? needWantData.need : needWantData.want;
+  const label = type === 'need' ? 'Need' : 'Want';
+
+  const badge = document.getElementById('nwModalBadge');
+  badge.textContent = label;
+  badge.className = 'nw-badge ' + type;
+
+  document.getElementById('nwModalTitle').textContent = 'Category Breakdown';
+  document.getElementById('nwModalTotal').innerHTML = `Total: <span>${fmt(data.total)}</span> across ${data.categories.length} categories`;
+
+  const listEl = document.getElementById('nwModalList');
+  const maxTotal = data.categories.length > 0 ? data.categories[0].total : 1;
+  const barColor = type === 'need' ? '#3b82f6' : '#f59e0b';
+
+  listEl.innerHTML = data.categories.map(c => {
+    const pct = data.total > 0 ? ((c.total / data.total) * 100).toFixed(1) : '0';
+    const barW = maxTotal > 0 ? Math.max(4, (c.total / maxTotal) * 100) : 0;
+    return `<div class="nw-cat-row">
+      <span class="nw-cat-icon">${c.icon || '📋'}</span>
+      <div class="nw-cat-info">
+        <div class="nw-cat-name">${escH(c.category)}</div>
+        <div class="nw-cat-count">${c.count} transaction${c.count !== 1 ? 's' : ''}</div>
+      </div>
+      <div class="nw-cat-bar-wrap"><div class="nw-cat-bar-fill" style="width:${barW}%;background:${barColor};"></div></div>
+      <span class="nw-cat-amount">${fmt(c.total)}</span>
+      <span class="nw-cat-pct">${pct}%</span>
+    </div>`;
+  }).join('') || '<div style="text-align:center;color:var(--text-muted);padding:20px;">No categories</div>';
+
+  document.getElementById('nwModal').classList.add('active');
+}
+
+function closeNwModal() {
+  document.getElementById('nwModal').classList.remove('active');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeNwModal();
+});
 
 function formatDateGroupHeader(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');

@@ -451,6 +451,41 @@ def get_all_overrides() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_need_want_breakdown(start: str, end: str) -> dict:
+    """Return need vs want totals with category-level breakdown."""
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT e.category, COALESCE(c.need_want, 'want') as need_want,
+           c.icon, c.color, SUM(e.amount) as total, COUNT(*) as count
+           FROM expenses e
+           LEFT JOIN categories c ON e.category = c.name
+           WHERE e.date >= ? AND e.date <= ? AND e.status = 'approved'
+           GROUP BY e.category, need_want
+           ORDER BY total DESC""",
+        (start, end),
+    ).fetchall()
+    conn.close()
+
+    need_cats = []
+    want_cats = []
+    need_total = 0
+    want_total = 0
+    for r in rows:
+        entry = {"category": r["category"], "icon": r["icon"] or "", "color": r["color"] or "#94a3b8",
+                 "total": r["total"], "count": r["count"]}
+        if r["need_want"] == "need":
+            need_cats.append(entry)
+            need_total += r["total"]
+        else:
+            want_cats.append(entry)
+            want_total += r["total"]
+
+    return {
+        "need": {"total": round(need_total, 2), "categories": need_cats},
+        "want": {"total": round(want_total, 2), "categories": want_cats},
+    }
+
+
 def get_monthly_bar_data(months: int = 12) -> list[dict]:
     conn = get_connection()
     rows = conn.execute(
