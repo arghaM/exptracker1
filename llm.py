@@ -5,8 +5,9 @@ import os
 import httpx
 import db
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 SYSTEM_PROMPT_TEMPLATE = """You are an expense parser for a family in India. Extract expenses from the following message.
 Return a JSON array of objects with: person, item, amount, category, notes, account.
@@ -67,23 +68,31 @@ def _build_system_prompt() -> str:
 async def parse_expense(raw_text: str) -> list[dict]:
     prompt = f'Message: "{raw_text}"'
     system_prompt = _build_system_prompt()
+    if not GROQ_API_KEY:
+        print("[LLM] GROQ_API_KEY not set")
+        return []
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
-                f"{OLLAMA_URL}/api/generate",
+                GROQ_URL,
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json",
+                },
                 json={
-                    "model": OLLAMA_MODEL,
-                    "prompt": prompt,
-                    "system": system_prompt,
-                    "stream": False,
-                    "format": "json",
+                    "model": GROQ_MODEL,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "response_format": {"type": "json_object"},
+                    "temperature": 0.1,
                 },
             )
             resp.raise_for_status()
             result = resp.json()
-            text = result.get("response", "").strip()
+            text = result["choices"][0]["message"]["content"].strip()
             parsed = json.loads(text)
-            # Ollama with format=json may return an object with array inside
             if isinstance(parsed, dict):
                 for v in parsed.values():
                     if isinstance(v, list):
