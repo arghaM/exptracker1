@@ -17,19 +17,18 @@ def _get_sheets_service():
 
 
 def fetch_new_messages(sheet_id: str, last_row: int) -> tuple[list[dict], int]:
-    """Read new rows from the Google Sheet after last_row.
+    """Read all rows from the Google Sheet (duplicate check is done by caller via processed_messages).
 
     The sheet is expected to have columns: A=timestamp, B=chat_id, C=message_id, D=text.
-    Rows are 1-indexed (row 1 may be a header).
+    Row 1 is a header and is skipped.
 
     Returns (messages, new_last_row) where messages match the telegram.py format:
         [{"message_id": int, "text": str, "date": "YYYY-MM-DD"}, ...]
     """
     service = _get_sheets_service()
 
-    # Start reading from the row after last_row. If last_row is 0, start from row 2 (skip header).
-    start_row = max(last_row + 1, 2)
-    range_str = f"Sheet1!A{start_row}:D"
+    # Always read all rows from row 2 (skip header), ignore last_row
+    range_str = "Sheet1!A2:D"
 
     result = (
         service.spreadsheets()
@@ -40,13 +39,11 @@ def fetch_new_messages(sheet_id: str, last_row: int) -> tuple[list[dict], int]:
 
     rows = result.get("values", [])
     if not rows:
-        return [], last_row
+        return [], 0
 
     messages = []
-    new_last_row = start_row - 1  # will be incremented per row
 
-    for i, row in enumerate(rows):
-        new_last_row = start_row + i
+    for row in rows:
         # Expect at least 4 columns: timestamp, chat_id, message_id, text
         if len(row) < 4:
             continue
@@ -73,4 +70,4 @@ def fetch_new_messages(sheet_id: str, last_row: int) -> tuple[list[dict], int]:
             "date": date_str,
         })
 
-    return messages, new_last_row
+    return messages, 0
