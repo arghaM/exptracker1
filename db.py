@@ -128,6 +128,7 @@ def init_db():
         'Petrol': 'Auto & Transport',
         'Transport': 'Auto & Transport',
         'Investment': 'Financial',
+        'Bills': 'Financial',
         'Entertainment': 'Entertainment',
         'Medicine': 'Health',
         'Lab Test': 'Health',
@@ -219,6 +220,7 @@ def init_db():
         'Petrol': ('⛽', '#f97316'),
         'Transport': ('🚗', '#14b8a6'),
         'Investment': ('💰', '#84cc16'),
+        'Bills': ('💳', '#f59e0b'),
         'Entertainment': ('🎬', '#a855f7'),
         'Medicine': ('💊', '#ef4444'),
         'Lab Test': ('🔬', '#06b6d4'),
@@ -248,6 +250,35 @@ def init_db():
         conn.commit()
     except Exception:
         pass
+
+    # Migration: add is_system column to categories
+    try:
+        conn.execute("ALTER TABLE categories ADD COLUMN is_system INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        pass
+
+    # Mark "Bills" as a system category
+    conn.execute("UPDATE categories SET is_system = 1 WHERE name = 'Bills'")
+    conn.commit()
+
+    # Create bill sinking fund tables
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS bill_fund_topups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            amount REAL NOT NULL,
+            note TEXT DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS bill_fund_deductions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bill_resolution_id INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (bill_resolution_id) REFERENCES bill_resolutions(id)
+        );
+    """)
+    conn.commit()
 
     conn.close()
 
@@ -526,6 +557,10 @@ def add_category(name: str, group_name: str | None = None):
 
 def delete_category(name: str):
     conn = get_connection()
+    row = conn.execute("SELECT is_system FROM categories WHERE name = ?", (name,)).fetchone()
+    if row and row["is_system"]:
+        conn.close()
+        raise ValueError("Cannot delete a system category")
     conn.execute("DELETE FROM categories WHERE name = ?", (name,))
     conn.commit()
     conn.close()
@@ -918,10 +953,23 @@ def get_upcoming_alerts(today_str: str | None = None) -> list[dict]:
 
 def resolve_bill(bill_id: int, due_date: str, expense_id: int | None):
     conn = get_connection()
-    conn.execute(
+    cur = conn.execute(
         "INSERT INTO bill_resolutions (bill_id, due_date, expense_id) VALUES (?, ?, ?)",
         (bill_id, due_date, expense_id),
     )
+    resolution_id = cur.lastrowid
+
+    # Auto-deduct from sinking fund if linked expense has category 'Bills'
+    if expense_id:
+        exp = conn.execute(
+            "SELECT category, amount FROM expenses WHERE id = ?", (expense_id,)
+        ).fetchone()
+        if exp and exp["category"] == "Bills":
+            conn.execute(
+                "INSERT INTO bill_fund_deductions (bill_resolution_id, amount) VALUES (?, ?)",
+                (resolution_id, abs(exp["amount"])),
+            )
+
     conn.commit()
     conn.close()
 
@@ -1045,7 +1093,7 @@ def get_category_detail(category: str) -> dict | None:
     """Full category detail for the right panel."""
     conn = get_connection()
     cat = conn.execute(
-        "SELECT name, group_name, icon, color, excluded, need_want FROM categories WHERE name = ?",
+        "SELECT name, group_name, icon, color, excluded, need_want, is_system FROM categories WHERE name = ?",
         (category,),
     ).fetchone()
     if not cat:
@@ -1207,6 +1255,42 @@ def get_tags_for_expenses(expense_ids: list[int]) -> dict[int, list[dict]]:
     return result
 
 
+def get_expenses_by_tag(tag_id: int, start: str, end: str) -> dict:
+    """Return transactions for a tag in a date range, grouped by month, with summary."""
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT e.* FROM expenses e
+           JOIN expense_tags et ON e.id = et.expense_id
+           WHERE et.tag_id = ? AND e.date >= ? AND e.date <= ? AND e.status = 'approved'
+           ORDER BY e.date DESC""",
+        (tag_id, start, end),
+    ).fetchall()
+    conn.close()
+    expenses = [dict(r) for r in rows]
+
+    if expenses:
+        tag_map = get_tags_for_expenses([e["id"] for e in expenses])
+        for e in expenses:
+            e["tags"] = tag_map.get(e["id"], [])
+
+    # Group by month
+    from collections import OrderedDict
+    groups: OrderedDict[str, dict] = OrderedDict()
+    for e in expenses:
+        m = e["date"][:7]
+        if m not in groups:
+            groups[m] = {"month": m, "transactions": [], "total": 0}
+        groups[m]["transactions"].append(e)
+        groups[m]["total"] = round(groups[m]["total"] + e["amount"], 2)
+
+    total = round(sum(e["amount"] for e in expenses), 2)
+    return {
+        "transactions": expenses,
+        "groups": list(groups.values()),
+        "summary": {"total": total, "count": len(expenses)},
+    }
+
+
 def set_expense_tags(expense_id: int, tag_ids: list[int]):
     conn = get_connection()
     conn.execute("DELETE FROM expense_tags WHERE expense_id = ?", (expense_id,))
@@ -1216,17 +1300,144 @@ def set_expense_tags(expense_id: int, tag_ids: list[int]):
     conn.close()
 
 
+# --- Bill Sinking Fund ---
+
+def get_monthly_funding_target() -> dict:
+    """Calculate sinking fund numbers for non-monthly bills.
+
+    Returns two key numbers:
+    - monthly_setaside: stable amount to save each month (annual_total / 12)
+    - upcoming_need: total amount needed for bills due in the next 90 days
+      minus current fund balance — i.e. the shortfall to cover soon.
+    Resolved bills skip to next occurrence.
+    """
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM bills").fetchall()
+    res_rows = conn.execute("SELECT bill_id, due_date FROM bill_resolutions").fetchall()
+    conn.close()
+
+    resolved_set = {(r["bill_id"], r["due_date"]) for r in res_rows}
+
+    today = date.today()
+    horizon = today + timedelta(days=90)
+
+    freq_annual_multiplier = {
+        'quarterly': 4,
+        'half-yearly': 2,
+        'yearly': 1,
+        'once_in_2_years': 0.5,
+        'once_in_3_years': 1 / 3,
+        'once_in_4_years': 0.25,
+        'once_in_5_years': 0.2,
+    }
+
+    bills_detail = []
+    annual_total = 0.0
+    upcoming_total = 0.0
+    next_bill = None
+    next_bill_days = None
+
+    for r in rows:
+        b = dict(r)
+        freq = b["frequency"]
+        if freq in ('monthly', 'weekly', 'biweekly'):
+            continue
+
+        anchor = date.fromisoformat(b["anchor_date"])
+        bill_end = date.fromisoformat(b["end_date"]) if b.get("end_date") else None
+
+        # Find next *unresolved* due date
+        ndd = _next_due_date(anchor, freq, today)
+        for _ in range(10):
+            if bill_end and ndd > bill_end:
+                ndd = None
+                break
+            if (b["id"], ndd.isoformat()) not in resolved_set:
+                break
+            ndd = _next_due_date(anchor, freq, ndd + timedelta(days=1))
+        else:
+            ndd = None
+
+        if ndd is None:
+            continue
+
+        multiplier = freq_annual_multiplier.get(freq, 1)
+        annual_cost = b["amount"] * multiplier
+        annual_total += annual_cost
+
+        days_until = (ndd - today).days
+        is_upcoming = ndd <= horizon
+
+        if is_upcoming:
+            upcoming_total += b["amount"]
+
+        bill_info = {
+            "id": b["id"],
+            "name": b["name"],
+            "amount": b["amount"],
+            "frequency": freq,
+            "annual_cost": round(annual_cost, 2),
+            "monthly_setaside": round(annual_cost / 12, 2),
+            "next_due_date": ndd.isoformat(),
+            "days_until_due": days_until,
+            "is_upcoming": is_upcoming,
+        }
+        bills_detail.append(bill_info)
+
+        if next_bill is None or days_until < next_bill_days:
+            next_bill = bill_info
+            next_bill_days = days_until
+
+    monthly_setaside = round(annual_total / 12, 2)
+    return {
+        "monthly_setaside": monthly_setaside,
+        "annual_total": round(annual_total, 2),
+        "upcoming_total": round(upcoming_total, 2),
+        "bills": bills_detail,
+        "next_bill": next_bill,
+    }
+
+
+def get_fund_balance() -> dict:
+    """Get current sinking fund balance."""
+    conn = get_connection()
+    topups = conn.execute("SELECT COALESCE(SUM(amount), 0) as total FROM bill_fund_topups").fetchone()
+    deductions = conn.execute("SELECT COALESCE(SUM(amount), 0) as total FROM bill_fund_deductions").fetchone()
+    conn.close()
+    total_topups = topups["total"]
+    total_deductions = deductions["total"]
+    return {
+        "total_topups": round(total_topups, 2),
+        "total_deductions": round(total_deductions, 2),
+        "balance": round(total_topups - total_deductions, 2),
+    }
+
+
+def add_fund_topup(amount: float, note: str = "") -> int:
+    """Add a manual top-up to the sinking fund."""
+    conn = get_connection()
+    cur = conn.execute(
+        "INSERT INTO bill_fund_topups (amount, note) VALUES (?, ?)",
+        (amount, note),
+    )
+    topup_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return topup_id
+
+
 # --- Backup & Restore ---
 
 ALL_TABLES = [
     "expenses", "processed_messages", "category_overrides", "categories",
     "bills", "bill_resolutions", "app_settings", "tags", "expense_tags",
-    "category_budgets", "account_labels",
+    "category_budgets", "account_labels", "bill_fund_topups", "bill_fund_deductions",
 ]
 
 # FK children first so deletes don't violate constraints
 _DELETE_ORDER = [
-    "expense_tags", "bill_resolutions", "category_budgets", "account_labels",
+    "expense_tags", "bill_fund_deductions", "bill_fund_topups",
+    "bill_resolutions", "category_budgets", "account_labels",
     "processed_messages", "category_overrides", "app_settings",
     "tags", "bills", "expenses", "categories",
 ]

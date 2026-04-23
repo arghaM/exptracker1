@@ -308,7 +308,10 @@ def create_category(body: CategoryCreate):
 
 @app.delete("/categories")
 def remove_category(name: str = Query(...)):
-    db.delete_category(name)
+    try:
+        db.delete_category(name)
+    except ValueError as e:
+        return {"error": str(e)}
     return {"status": "deleted", "name": name}
 
 
@@ -709,6 +712,26 @@ def list_bills():
     return {"bills": db.get_all_bills()}
 
 
+class FundTopup(BaseModel):
+    amount: float
+    note: str = ""
+
+
+@app.get("/bills/funding")
+def bill_funding():
+    target = db.get_monthly_funding_target()
+    balance = db.get_fund_balance()
+    return {**target, **balance}
+
+
+@app.post("/bills/funding/topup")
+def bill_fund_topup(body: FundTopup):
+    if body.amount <= 0:
+        return {"error": "Amount must be positive"}
+    topup_id = db.add_fund_topup(body.amount, body.note)
+    return {"status": "ok", "id": topup_id}
+
+
 @app.post("/bills")
 def create_bill(body: BillCreate):
     bill_id = db.create_bill(
@@ -892,3 +915,18 @@ def update_tag(tag_id: int, body: TagUpdate):
 def delete_tag(tag_id: int):
     db.delete_tag(tag_id)
     return {"status": "deleted", "id": tag_id}
+
+
+@app.get("/tags-page", response_class=HTMLResponse)
+def tags_page():
+    html_path = Path(__file__).parent / "tags.html"
+    return html_path.read_text()
+
+
+@app.get("/tags/{tag_id}/transactions")
+def tag_transactions(
+    tag_id: int,
+    start: str = Query(..., description="Start date YYYY-MM-DD"),
+    end: str = Query(..., description="End date YYYY-MM-DD"),
+):
+    return db.get_expenses_by_tag(tag_id, start, end)

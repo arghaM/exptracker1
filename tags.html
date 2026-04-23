@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tags - Expense Tracker</title>
+<style>
+  :root {
+    --green-50: #f0fdf4; --green-100: #dcfce7; --green-500: #22c55e; --green-600: #16a34a; --green-700: #15803d;
+    --blue-50: #eff6ff; --blue-100: #dbeafe; --blue-500: #3b82f6; --blue-600: #2563eb; --blue-700: #1d4ed8;
+    --sidebar-bg: #ffffff; --sidebar-hover: #f8fafc; --sidebar-active: var(--blue-50);
+    --sidebar-text: #64748b; --sidebar-text-active: var(--blue-700); --sidebar-border: #e2e8f0;
+    --bg: #f8fafc; --card-bg: #ffffff; --card-border: #e2e8f0;
+    --text-primary: #1e293b; --text-secondary: #64748b; --text-muted: #94a3b8; --border: #e2e8f0;
+    --sidebar-width: 220px; --red-500: #ef4444; --red-50: #fef2f2; --orange-500: #f59e0b;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text-primary); display: flex; min-height: 100vh; }
+
+  .sidebar { width: var(--sidebar-width); background: var(--sidebar-bg); border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; }
+  .sidebar-brand { padding: 20px 16px 28px; display: flex; align-items: center; gap: 10px; }
+  .sidebar-brand .logo { width: 30px; height: 30px; background: var(--blue-600); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; font-size: 14px; }
+  .sidebar-brand .name { color: var(--text-primary); font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+  .sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
+  .sidebar-link { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--sidebar-text); text-decoration: none; font-size: 13.5px; font-weight: 500; transition: all 0.15s; border: 1px solid transparent; }
+  .sidebar-link:hover { background: var(--sidebar-hover); color: var(--text-primary); }
+  .sidebar-link.active { background: var(--sidebar-active); color: var(--sidebar-text-active); font-weight: 600; border-color: var(--blue-100); }
+  .sidebar-link svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .sidebar-section { padding: 20px 12px 8px; font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; min-height: 100vh; display: flex; flex-direction: column; }
+  .topbar { background: var(--card-bg); border-bottom: 1px solid var(--card-border); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; }
+  .topbar h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+
+  .content-split { display: flex; flex: 1; overflow: hidden; position: relative; }
+  .left-panel { width: 320px; min-width: 0; overflow-y: auto; padding: 24px 16px; border-right: 1px solid var(--border); transition: width 0.25s ease, padding 0.25s ease; flex-shrink: 0; }
+  .left-panel.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; }
+  .right-panel { flex: 1; overflow-y: auto; background: white; min-width: 0; }
+
+  /* Resize handle */
+  .resize-handle { width: 6px; cursor: col-resize; background: transparent; flex-shrink: 0; position: relative; z-index: 10; margin: 0 -3px; }
+  .resize-handle::after { content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px; background: transparent; transition: background 0.15s; }
+  .resize-handle:hover::after, .resize-handle.active::after { background: var(--blue-500); }
+  .left-panel.collapsed + .resize-handle { display: none; }
+
+  /* Collapse toggle */
+  .collapse-toggle { position: absolute; top: 12px; z-index: 20; width: 24px; height: 24px; border-radius: 50%; background: var(--card-bg); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,0.08); transition: all 0.15s; }
+  .collapse-toggle:hover { background: var(--blue-50); border-color: var(--blue-500); }
+  .collapse-toggle svg { width: 12px; height: 12px; color: var(--text-secondary); transition: transform 0.25s; }
+  .collapse-toggle.collapsed svg { transform: rotate(180deg); }
+
+  .tag-list { display: flex; flex-direction: column; gap: 2px; }
+  .tag-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.1s; }
+  .tag-row:hover { background: #f8fafc; }
+  .tag-row.selected { background: var(--blue-50); }
+  .tag-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .tag-name { font-size: 13.5px; font-weight: 500; flex: 1; }
+  .tag-pill { font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 12px; color: white; }
+
+  .detail-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); gap: 12px; }
+  .detail-empty svg { width: 56px; height: 56px; opacity: 0.3; }
+  .detail-empty p { font-size: 14px; }
+
+  .detail-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #f3f4f6; }
+  .detail-header-left { display: flex; align-items: center; gap: 10px; }
+  .detail-header-title { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .btn-close { background: none; border: none; cursor: pointer; font-size: 18px; color: var(--text-muted); padding: 5px 10px; border-radius: 6px; font-family: var(--font); }
+  .btn-close:hover { background: #f3f4f6; }
+
+  .date-bar { display: flex; align-items: center; gap: 10px; padding: 12px 24px; border-bottom: 1px solid #f3f4f6; flex-wrap: wrap; }
+  .date-bar input[type="date"] { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: var(--font); }
+  .date-bar input[type="date"]:focus { outline: none; border-color: var(--blue-500); }
+  .date-bar .btn-apply { padding: 6px 16px; background: var(--blue-600); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font); }
+  .date-bar .btn-apply:hover { background: var(--blue-700); }
+  .date-bar .btn-reset { padding: 6px 12px; background: none; border: none; color: var(--text-secondary); font-size: 13px; font-weight: 500; cursor: pointer; font-family: var(--font); text-decoration: underline; }
+  .date-bar .btn-reset:hover { color: var(--text-primary); }
+
+  .summary-row { display: flex; gap: 24px; padding: 16px 24px; border-bottom: 1px solid #f3f4f6; }
+  .summary-stat { text-align: center; }
+  .summary-amount { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .summary-label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+  .detail-body { padding: 0 24px 24px; }
+  .detail-txn-group { margin-bottom: 16px; }
+  .txn-month-header { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 0 8px; border-bottom: 1px solid #f3f4f6; margin-bottom: 4px; }
+  .txn-month-name { font-size: 14px; font-weight: 600; }
+  .txn-month-total { font-size: 14px; font-weight: 600; }
+  .txn-item { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-radius: 8px; transition: background 0.1s; }
+  .txn-item:hover { background: #f8fafc; }
+  .txn-item:not(:last-child) { border-bottom: 1px solid #fafbfc; }
+  .txn-date { font-size: 12px; color: var(--text-muted); width: 90px; flex-shrink: 0; }
+  .txn-name { flex: 1; font-size: 13px; font-weight: 500; }
+  .txn-cat { font-size: 11px; color: var(--text-secondary); background: #f1f5f9; padding: 2px 8px; border-radius: 6px; flex-shrink: 0; }
+  .txn-amount { font-size: 13px; font-weight: 600; flex-shrink: 0; }
+
+  .empty-txn { color: var(--text-muted); font-size: 13px; padding: 24px 0; text-align: center; }
+
+  .txn-item { cursor: pointer; }
+
+  /* Transaction edit modal */
+  .txn-edit-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+  .txn-edit-overlay.active { display: flex; }
+  .txn-edit-modal { background: white; border-radius: 16px; padding: 28px; width: 420px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+  .txn-edit-modal h3 { font-size: 18px; font-weight: 600; margin-bottom: 20px; letter-spacing: -0.3px; display: flex; align-items: center; justify-content: space-between; }
+  .txn-edit-field { margin-bottom: 14px; }
+  .txn-edit-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .txn-edit-field input, .txn-edit-field select { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-family: var(--font); }
+  .txn-edit-field input:focus, .txn-edit-field select:focus { outline: none; border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .txn-edit-row { display: flex; gap: 12px; }
+  .txn-edit-row .txn-edit-field { flex: 1; }
+  .txn-edit-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+  .txn-edit-actions .right-btns { display: flex; gap: 8px; }
+  .txn-edit-delete { background: none; border: none; color: var(--red-500); font-size: 13px; font-weight: 500; cursor: pointer; font-family: var(--font); padding: 9px 14px; border-radius: 10px; }
+  .txn-edit-delete:hover { background: var(--red-50); }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 18px; padding: 4px; }
+  .btn-cancel { background: none; border: 1px solid var(--border); padding: 9px 18px; border-radius: 10px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: var(--font); color: var(--text-secondary); }
+  .btn-cancel:hover { background: #f8fafc; }
+  .btn-create { background: var(--blue-600); color: white; border: none; padding: 9px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font); }
+  .btn-create:hover { background: var(--blue-700); }
+
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .main { margin-left: 0; }
+    .content-split { flex-direction: column; }
+    .left-panel { width: 100% !important; max-width: 100%; border-right: none; border-bottom: 1px solid var(--border); flex-shrink: unset; }
+    .left-panel.collapsed { width: 0 !important; height: 0; padding: 0; border-bottom: none; }
+    .resize-handle { display: none; }
+    .collapse-toggle { left: 8px !important; top: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-brand"><div class="logo">E</div><div class="name">ExpTracker</div></div>
+  <div class="sidebar-nav">
+    <a href="/" class="sidebar-link"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>Dashboard</a>
+    <a href="/transactions" class="sidebar-link"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>Transactions</a>
+    <a href="/accounts-page" class="sidebar-link"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>Accounts</a>
+    <a href="/bills-page" class="sidebar-link"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>Bills</a>
+    <a href="/reports-page" class="sidebar-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Reports
+    </a>
+    <div class="sidebar-section">Manage</div>
+    <a href="/admin" class="sidebar-link"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>Categories</a>
+    <a href="/tags-page" class="sidebar-link active"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>Tags</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <h2>Tags</h2>
+  </div>
+
+  <div class="content-split" id="contentSplit">
+    <div class="left-panel" id="leftPanel">
+      <div class="tag-list" id="tagList">
+        <div style="color:var(--text-muted);font-size:13px;padding:12px">Loading tags...</div>
+      </div>
+    </div>
+    <div class="resize-handle" id="resizeHandle"></div>
+    <button class="collapse-toggle" id="collapseToggle" title="Toggle tag list">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+    </button>
+
+    <div class="right-panel" id="rightPanel">
+      <div class="detail-empty" id="emptyState">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/>
+        </svg>
+        <p>Select a tag to view transactions</p>
+      </div>
+      <div id="tagDetail" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Transaction Edit Modal -->
+<div class="txn-edit-overlay" id="txnEditModal">
+  <div class="txn-edit-modal">
+    <h3>Edit transaction <button class="modal-close" onclick="closeTxnEdit()">&times;</button></h3>
+    <input type="hidden" id="txnEditId">
+    <div class="txn-edit-field">
+      <label>Item</label>
+      <input type="text" id="txnEditItem">
+    </div>
+    <div class="txn-edit-row">
+      <div class="txn-edit-field">
+        <label>Amount</label>
+        <input type="number" id="txnEditAmount" step="0.01">
+      </div>
+      <div class="txn-edit-field">
+        <label>Date</label>
+        <input type="date" id="txnEditDate">
+      </div>
+    </div>
+    <div class="txn-edit-row">
+      <div class="txn-edit-field">
+        <label>Category</label>
+        <select id="txnEditCategory"></select>
+      </div>
+      <div class="txn-edit-field">
+        <label>Account</label>
+        <input type="text" id="txnEditAccount">
+      </div>
+    </div>
+    <div class="txn-edit-field">
+      <label>Notes</label>
+      <input type="text" id="txnEditNotes">
+    </div>
+    <div class="txn-edit-actions">
+      <button class="txn-edit-delete" onclick="deleteTxnFromEdit()">Delete</button>
+      <div class="right-btns">
+        <button class="btn-cancel" onclick="closeTxnEdit()">Cancel</button>
+        <button class="btn-create" onclick="saveTxnEdit()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const now = new Date();
+
+function localDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function defaultStart() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 6);
+  return localDate(d);
+}
+
+function fmt(n) {
+  return '₹' + Number(n).toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+}
+
+let tags = [];
+let selectedTagId = null;
+let dateStart = defaultStart();
+let dateEnd = localDate(now);
+
+async function loadTags() {
+  const res = await fetch('/tags');
+  const data = await res.json();
+  tags = data.tags || [];
+  renderTagList();
+}
+
+function renderTagList() {
+  const el = document.getElementById('tagList');
+  if (!tags.length) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px">No tags created yet</div>';
+    return;
+  }
+  el.innerHTML = tags.map(t => `
+    <div class="tag-row ${t.id === selectedTagId ? 'selected' : ''}" onclick="selectTag(${t.id})">
+      <div class="tag-dot" style="background:${t.color}"></div>
+      <span class="tag-name">${esc(t.name)}</span>
+      <span class="tag-pill" style="background:${t.color}">${esc(t.name)}</span>
+    </div>
+  `).join('');
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function selectTag(tagId) {
+  selectedTagId = tagId;
+  renderTagList();
+  await loadTagTransactions();
+}
+
+async function loadTagTransactions() {
+  if (!selectedTagId) return;
+  const tag = tags.find(t => t.id === selectedTagId);
+  if (!tag) return;
+
+  document.getElementById('emptyState').style.display = 'none';
+  const detail = document.getElementById('tagDetail');
+  detail.style.display = 'block';
+  detail.innerHTML = '<div style="padding:24px;color:var(--text-muted);font-size:13px">Loading...</div>';
+
+  const res = await fetch(`/tags/${selectedTagId}/transactions?start=${dateStart}&end=${dateEnd}`);
+  const data = await res.json();
+
+  const summary = data.summary || {total: 0, count: 0};
+  const groups = data.groups || [];
+
+  detail.innerHTML = `
+    <div class="detail-header">
+      <div class="detail-header-left">
+        <div class="tag-dot" style="background:${tag.color};width:12px;height:12px"></div>
+        <span class="detail-header-title">${esc(tag.name)}</span>
+      </div>
+      <button class="btn-close" onclick="closeDetail()">&times;</button>
+    </div>
+    <div class="date-bar">
+      <input type="date" id="dateStart" value="${dateStart}">
+      <span style="color:var(--text-muted)">to</span>
+      <input type="date" id="dateEnd" value="${dateEnd}">
+      <button class="btn-apply" onclick="applyDateRange()">Apply</button>
+      <button class="btn-reset" onclick="resetDateRange()">Reset</button>
+    </div>
+    <div class="summary-row">
+      <div class="summary-stat">
+        <div class="summary-amount">${fmt(summary.total)}</div>
+        <div class="summary-label">Total Spent</div>
+      </div>
+      <div class="summary-stat">
+        <div class="summary-amount">${summary.count}</div>
+        <div class="summary-label">Transactions</div>
+      </div>
+    </div>
+    <div class="detail-body">
+      ${renderTxnGroups(groups)}
+    </div>
+  `;
+}
+
+function renderTxnGroups(groups) {
+  if (!groups.length) return '<div class="empty-txn">No transactions for this tag in the selected range</div>';
+  return groups.map(g => {
+    const [y, m] = g.month.split('-');
+    const monthName = `${MONTH_FULL[parseInt(m)-1]} ${y}`;
+    return `<div class="detail-txn-group">
+      <div class="txn-month-header">
+        <span class="txn-month-name">${monthName}</span>
+        <span class="txn-month-total">${fmt(g.total)}</span>
+      </div>
+      ${g.transactions.map(t => {
+        const d = new Date(t.date + 'T00:00:00');
+        const isToday = t.date === localDate(now);
+        const dateStr = isToday ? 'Today' : d.toLocaleDateString('en-IN', {weekday:'short', month:'short', day:'numeric'});
+        return `<div class="txn-item" onclick="openTxnEdit(${t.id})">
+          <span class="txn-date">${dateStr}</span>
+          <span class="txn-name">${esc(t.item)}</span>
+          <span class="txn-cat">${esc(t.category)}</span>
+          <span class="txn-amount">${fmt(t.amount)}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+}
+
+function applyDateRange() {
+  const s = document.getElementById('dateStart').value;
+  const e = document.getElementById('dateEnd').value;
+  if (s) dateStart = s;
+  if (e) dateEnd = e;
+  loadTagTransactions();
+}
+
+function resetDateRange() {
+  dateStart = defaultStart();
+  dateEnd = localDate(now);
+  loadTagTransactions();
+}
+
+function closeDetail() {
+  selectedTagId = null;
+  renderTagList();
+  document.getElementById('tagDetail').style.display = 'none';
+  document.getElementById('emptyState').style.display = 'flex';
+}
+
+// --- Transaction Edit Modal ---
+let txnEditCategoriesLoaded = false;
+
+async function openTxnEdit(id) {
+  const expResp = await fetch('/expenses/' + id);
+  const expense = await expResp.json();
+  if (expense.error) { alert('Transaction not found'); return; }
+
+  if (!txnEditCategoriesLoaded) {
+    const catResp = await fetch('/categories');
+    const catData = await catResp.json();
+    const sel = document.getElementById('txnEditCategory');
+    sel.innerHTML = (catData.categories || []).map(c =>
+      `<option value="${esc(c)}">${esc(c)}</option>`
+    ).join('');
+    txnEditCategoriesLoaded = true;
+  }
+
+  document.getElementById('txnEditId').value = id;
+  document.getElementById('txnEditItem').value = expense.item || '';
+  document.getElementById('txnEditAmount').value = Math.abs(expense.amount);
+  document.getElementById('txnEditDate').value = expense.date || '';
+  document.getElementById('txnEditCategory').value = expense.category || '';
+  document.getElementById('txnEditAccount').value = expense.account || '';
+  document.getElementById('txnEditNotes').value = expense.notes || '';
+
+  document.getElementById('txnEditModal').classList.add('active');
+}
+
+function closeTxnEdit() {
+  document.getElementById('txnEditModal').classList.remove('active');
+}
+
+document.getElementById('txnEditModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('txnEditModal')) closeTxnEdit();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeTxnEdit();
+});
+
+async function saveTxnEdit() {
+  const id = document.getElementById('txnEditId').value;
+  const item = document.getElementById('txnEditItem').value.trim();
+  const amount = parseFloat(document.getElementById('txnEditAmount').value);
+  const date = document.getElementById('txnEditDate').value;
+  const category = document.getElementById('txnEditCategory').value;
+  const account = document.getElementById('txnEditAccount').value;
+  const notes = document.getElementById('txnEditNotes').value;
+
+  if (!item || !amount || !date || !category) { alert('Please fill required fields.'); return; }
+
+  const resp = await fetch('/expenses/' + id, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ date, item, amount, category, notes, account })
+  });
+
+  if (resp.ok) {
+    closeTxnEdit();
+    await loadTagTransactions();
+  } else {
+    alert('Failed to save');
+  }
+}
+
+async function deleteTxnFromEdit() {
+  const id = document.getElementById('txnEditId').value;
+  if (!confirm('Delete this transaction?')) return;
+  await fetch('/expenses/' + id + '/discard', { method: 'PUT' });
+  closeTxnEdit();
+  await loadTagTransactions();
+}
+
+// --- Resize handle ---
+(function() {
+  const handle = document.getElementById('resizeHandle');
+  const left = document.getElementById('leftPanel');
+  const split = document.getElementById('contentSplit');
+  const toggle = document.getElementById('collapseToggle');
+  let dragging = false;
+  let startX, startW;
+
+  function positionToggle() {
+    const w = left.classList.contains('collapsed') ? 0 : left.offsetWidth;
+    toggle.style.left = (w + 1) + 'px';
+  }
+
+  handle.addEventListener('mousedown', (e) => {
+    if (left.classList.contains('collapsed')) return;
+    dragging = true;
+    startX = e.clientX;
+    startW = left.offsetWidth;
+    handle.classList.add('active');
+    left.style.transition = 'none';
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const newW = Math.max(180, Math.min(startW + dx, split.offsetWidth - 300));
+    left.style.width = newW + 'px';
+    positionToggle();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('active');
+    left.style.transition = '';
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+
+  // Collapse toggle
+  toggle.addEventListener('click', () => {
+    const isCollapsed = left.classList.toggle('collapsed');
+    toggle.classList.toggle('collapsed', isCollapsed);
+    // After transition, reposition
+    setTimeout(positionToggle, 260);
+    positionToggle();
+  });
+
+  // Initial position
+  requestAnimationFrame(positionToggle);
+  window.addEventListener('resize', positionToggle);
+})();
+
+loadTags();
+</script>
+</body>
+</html>
