@@ -416,6 +416,32 @@
       </div>
     </div>
 
+    <!-- FIRE Corpus Card -->
+    <div class="dash-row" style="grid-template-columns:1fr;">
+      <div class="dash-card" id="fireCard" style="display:none;cursor:pointer;" onclick="openFireModal()">
+        <div class="dash-card-header">
+          <span class="dash-card-title">FIRE Corpus</span>
+          <span class="dash-card-link">Details &#8250;</span>
+        </div>
+        <div class="stat-big" id="fireFullNum">-</div>
+        <div class="stat-sub" id="fireFullLabel">Full FIRE (all expenses + bills)</div>
+        <div class="stat-row" style="margin-top:10px;">
+          <div class="stat-item">
+            <span class="stat-item-label">Lean FIRE</span>
+            <span class="stat-item-value" id="fireLeanNum">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-item-label">Monthly Avg</span>
+            <span class="stat-item-value" id="fireMonthlyAvg">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-item-label">Data</span>
+            <span class="stat-item-value" id="fireDataMonths">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Topup Modal -->
     <div id="topupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
       <div class="fund-topup-modal">
@@ -578,6 +604,38 @@
   </div>
 </div>
 
+<!-- FIRE Corpus Modal -->
+<div class="modal-overlay" id="fireModal">
+  <div class="drill-modal" style="width:720px;">
+    <div class="drill-modal-header">
+      <h3>FIRE Corpus Calculator</h3>
+      <button class="close-btn" onclick="closeFireModal()">&times;</button>
+    </div>
+    <div style="padding:16px 24px;background:#fafbfc;border-bottom:1px solid #f3f4f6;">
+      <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">
+        <label style="font-size:12px;font-weight:500;color:var(--text-secondary);display:flex;flex-direction:column;gap:4px;">
+          Withdrawal Rate (%)
+          <input type="number" id="fireWithdrawal" value="4" min="1" max="15" step="0.5" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:90px;font-family:var(--font);">
+        </label>
+        <label style="font-size:12px;font-weight:500;color:var(--text-secondary);display:flex;flex-direction:column;gap:4px;">
+          Inflation Rate (%)
+          <input type="number" id="fireInflation" value="7" min="0" max="20" step="0.5" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:90px;font-family:var(--font);">
+        </label>
+        <label style="font-size:12px;font-weight:500;color:var(--text-secondary);display:flex;flex-direction:column;gap:4px;">
+          Years to Retire
+          <input type="number" id="fireYears" value="20" min="1" max="50" step="1" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:90px;font-family:var(--font);">
+        </label>
+        <button onclick="recalcFire()" style="background:var(--green-600);color:white;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;font-family:var(--font);">Recalculate</button>
+      </div>
+    </div>
+    <div class="drill-modal-body" style="padding:20px 24px;">
+      <div id="fireModalContent">
+        <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:14px;">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 let currentYear, currentMonth;
 let barChart = null;
@@ -592,6 +650,7 @@ async function init() {
   loadExpenses();
   loadBillAlerts();
   loadFundingWidget();
+  loadFireCard();
   loadLineChart();
   loadPieChart();
   loadChart();
@@ -1565,6 +1624,148 @@ async function saveNewExpense() {
     loadPieChart();
     loadLineChart();
   }
+}
+
+// --- FIRE Corpus ---
+let fireData = null;
+
+function fmtLakh(amount) {
+  if (amount >= 10000000) return (amount / 10000000).toFixed(2) + ' Cr';
+  if (amount >= 100000) return (amount / 100000).toFixed(2) + ' L';
+  return fmt(amount);
+}
+
+async function loadFireCard() {
+  try {
+    const resp = await fetch('/reports/fire-corpus');
+    fireData = await resp.json();
+    const card = document.getElementById('fireCard');
+
+    if (fireData.annual_expenses === 0 && fireData.annual_bills === 0) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+
+    const wr = 0.04;
+    const fullAnnual = fireData.annual_expenses + fireData.annual_bills;
+    const leanAnnual = fireData.annual_needs + fireData.annual_bills;
+    const fullCorpus = fullAnnual / wr;
+    const leanCorpus = leanAnnual / wr;
+
+    document.getElementById('fireFullNum').textContent = fmtLakh(fullCorpus);
+    document.getElementById('fireFullLabel').textContent = 'Full FIRE at 4% withdrawal (' + fmt(Math.round(fullAnnual)) + '/yr)';
+    document.getElementById('fireLeanNum').textContent = fmtLakh(leanCorpus);
+    document.getElementById('fireMonthlyAvg').textContent = fmt(Math.round(fireData.monthly_avg));
+    document.getElementById('fireDataMonths').textContent = fireData.months_of_data + ' months';
+  } catch (e) {
+    console.error('Failed to load FIRE card', e);
+  }
+}
+
+function openFireModal() {
+  document.getElementById('fireModal').classList.add('active');
+  recalcFire();
+}
+
+function closeFireModal() {
+  document.getElementById('fireModal').classList.remove('active');
+}
+
+document.getElementById('fireModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('fireModal')) closeFireModal();
+});
+
+function recalcFire() {
+  if (!fireData) return;
+  const wr = parseFloat(document.getElementById('fireWithdrawal').value) / 100 || 0.04;
+  const inf = parseFloat(document.getElementById('fireInflation').value) / 100 || 0.07;
+  const yrs = parseInt(document.getElementById('fireYears').value) || 20;
+
+  const fullAnnual = fireData.annual_expenses + fireData.annual_bills;
+  const leanAnnual = fireData.annual_needs + fireData.annual_bills;
+
+  const fullCorpus = fullAnnual / wr;
+  const leanCorpus = leanAnnual / wr;
+  const fullInflAdj = fullCorpus * Math.pow(1 + inf, yrs);
+  const leanInflAdj = leanCorpus * Math.pow(1 + inf, yrs);
+
+  const monthlyBills = fireData.annual_bills / 12;
+
+  let topCatsHtml = '';
+  if (fireData.top_categories && fireData.top_categories.length > 0) {
+    topCatsHtml = fireData.top_categories.map(c => `
+      <div class="top-cat-item">
+        <div class="top-cat-left">
+          <span class="top-cat-dot" style="background:${c.color}"></span>
+          <span style="font-size:15px;">${c.icon}</span>
+          <span class="top-cat-name">${escapeHtml(c.name)}</span>
+        </div>
+        <span class="top-cat-amount">${fmt(Math.round(c.total))}</span>
+      </div>
+    `).join('');
+  }
+
+  const content = document.getElementById('fireModalContent');
+  content.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div style="background:var(--green-50);border:1px solid var(--green-100);border-radius:12px;padding:18px 20px;">
+        <div style="font-size:12px;font-weight:600;color:var(--green-700);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Full FIRE</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">All expenses + bills</div>
+        <div style="font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Annual spend: ${fmt(Math.round(fullAnnual))}</div>
+        <div style="font-size:24px;font-weight:700;color:var(--green-700);letter-spacing:-0.5px;">${fmtLakh(fullCorpus)}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Today's corpus needed</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--green-100);">
+          <div style="font-size:18px;font-weight:700;color:var(--text-primary);">${fmtLakh(fullInflAdj)}</div>
+          <div style="font-size:11px;color:var(--text-muted);">Inflation-adjusted in ${yrs} yrs</div>
+        </div>
+      </div>
+      <div style="background:var(--blue-50);border:1px solid var(--blue-100);border-radius:12px;padding:18px 20px;">
+        <div style="font-size:12px;font-weight:600;color:var(--blue-700);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Lean FIRE</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Needs only + bills</div>
+        <div style="font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Annual spend: ${fmt(Math.round(leanAnnual))}</div>
+        <div style="font-size:24px;font-weight:700;color:var(--blue-700);letter-spacing:-0.5px;">${fmtLakh(leanCorpus)}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Today's corpus needed</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--blue-100);">
+          <div style="font-size:18px;font-weight:700;color:var(--text-primary);">${fmtLakh(leanInflAdj)}</div>
+          <div style="font-size:11px;color:var(--text-muted);">Inflation-adjusted in ${yrs} yrs</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#f8fafc;border-radius:10px;padding:16px 20px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:10px;">Monthly Breakdown</div>
+      <div style="display:flex;gap:24px;">
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Needs</div>
+          <div style="font-size:16px;font-weight:600;margin-top:2px;">${fmt(Math.round(fireData.monthly_needs_avg))}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Wants</div>
+          <div style="font-size:16px;font-weight:600;margin-top:2px;">${fmt(Math.round((fireData.annual_wants) / 12))}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Bills</div>
+          <div style="font-size:16px;font-weight:600;margin-top:2px;">${fmt(Math.round(monthlyBills))}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Total</div>
+          <div style="font-size:16px;font-weight:700;margin-top:2px;color:var(--green-600);">${fmt(Math.round(fireData.monthly_avg + monthlyBills))}</div>
+        </div>
+      </div>
+    </div>
+
+    ${topCatsHtml ? `
+    <div style="margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">Top Categories (last 12 months)</div>
+      ${topCatsHtml}
+    </div>` : ''}
+
+    <div style="text-align:center;padding:8px 0;color:var(--text-muted);font-size:12px;">
+      Based on ${fireData.months_of_data} month${fireData.months_of_data !== 1 ? 's' : ''} of data
+      ${fireData.months_of_data < 6 ? ' &mdash; <span style="color:#f59e0b;">more data improves accuracy</span>' : ''}
+    </div>
+  `;
 }
 
 init();

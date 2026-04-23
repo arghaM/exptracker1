@@ -1494,6 +1494,106 @@ def import_all_data(data: dict):
     init_db()
 
 
+# --- FIRE Corpus ---
+
+def get_fire_corpus_data() -> dict:
+    """Compute FIRE corpus data from last 12 months of expenses + annualized bills."""
+    conn = get_connection()
+    today = date.today()
+    # 12 months back from the 1st of current month, up to today
+    start_date = _add_months(today.replace(day=1), -12)
+    start = start_date.isoformat()
+    end = today.isoformat()
+
+    # Annual expenses split by need/want
+    rows = conn.execute(
+        """SELECT e.category, COALESCE(c.need_want, 'want') as need_want,
+           c.icon, c.color, SUM(e.amount) as total
+           FROM expenses e
+           LEFT JOIN categories c ON e.category = c.name
+           WHERE e.date >= ? AND e.date <= ? AND e.status = 'approved'
+           GROUP BY e.category, need_want
+           ORDER BY total DESC""",
+        (start, end),
+    ).fetchall()
+
+    annual_expenses = 0.0
+    annual_needs = 0.0
+    annual_wants = 0.0
+    top_categories = []
+    for r in rows:
+        total = r["total"]
+        annual_expenses += total
+        if r["need_want"] == "need":
+            annual_needs += total
+        else:
+            annual_wants += total
+        top_categories.append({
+            "name": r["category"],
+            "icon": r["icon"] or "",
+            "color": r["color"] or "#94a3b8",
+            "total": round(total, 2),
+        })
+
+    # Top 5 categories
+    top_categories = top_categories[:5]
+
+    # Months with data (for confidence indicator)
+    month_rows = conn.execute(
+        """SELECT COUNT(DISTINCT strftime('%Y-%m', date)) as mc
+           FROM expenses WHERE date >= ? AND date <= ? AND status = 'approved'""",
+        (start, end),
+    ).fetchone()
+    months_of_data = month_rows["mc"] if month_rows else 0
+
+    # Annualized bills (reuse freq_annual_multiplier pattern)
+    bill_rows = conn.execute("SELECT * FROM bills").fetchall()
+    conn.close()
+
+    freq_annual_multiplier = {
+        'weekly': 52,
+        'biweekly': 26,
+        'monthly': 12,
+        'quarterly': 4,
+        'half-yearly': 2,
+        'yearly': 1,
+        'once_in_2_years': 0.5,
+        'once_in_3_years': 1 / 3,
+        'once_in_4_years': 0.25,
+        'once_in_5_years': 0.2,
+    }
+
+    annual_bills = 0.0
+    for r in bill_rows:
+        b = dict(r)
+        # Skip expired bills
+        if b.get("end_date"):
+            try:
+                if date.fromisoformat(b["end_date"]) < today:
+                    continue
+            except ValueError:
+                pass
+        multiplier = freq_annual_multiplier.get(b["frequency"], 1)
+        annual_bills += b["amount"] * multiplier
+
+    # Annualize expenses: extrapolate from actual months of data to 12
+    m = max(months_of_data, 1)
+    monthly_avg = annual_expenses / m
+    monthly_needs_avg = annual_needs / m
+    monthly_wants_avg = annual_wants / m
+
+    return {
+        "annual_expenses": round(monthly_avg * 12, 2),
+        "annual_needs": round(monthly_needs_avg * 12, 2),
+        "annual_wants": round(monthly_wants_avg * 12, 2),
+        "annual_bills": round(annual_bills, 2),
+        "monthly_avg": round(monthly_avg, 2),
+        "monthly_needs_avg": round(monthly_needs_avg, 2),
+        "top_categories": top_categories,
+        "months_of_data": months_of_data,
+    }
+
+
 # --- Refunds ---
 
 def create_refund(original_id: int, amount: float) -> int:

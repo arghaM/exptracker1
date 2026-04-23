@@ -493,6 +493,11 @@ def need_want_breakdown(start: str = Query(...), end: str = Query(...)):
     return db.get_need_want_breakdown(start, end)
 
 
+@app.get("/reports/fire-corpus")
+def fire_corpus():
+    return db.get_fire_corpus_data()
+
+
 @app.get("/reports/chart/monthly")
 def chart_monthly(months: int = Query(12, ge=1, le=36)):
     return {"data": db.get_monthly_bar_data(months)}
