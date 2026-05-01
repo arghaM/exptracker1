@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from datetime import datetime, timedelta
@@ -45,11 +46,18 @@ async def sync_telegram_once() -> dict:
 
     messages, last_update_id = await telegram.fetch_new_messages(bot_token, chat_id, last_update_id)
     db.set_setting("last_update_id", str(last_update_id))
-    for msg in messages:
+    errors = 0
+    for idx, msg in enumerate(messages):
         if db.is_message_processed(msg["message_id"]):
             continue
+        if idx > 0:
+            await asyncio.sleep(1.0)
         print(f"[Sync] Processing: {msg['text']}")
         expenses = await llm.parse_expense(msg["text"])
+        if expenses is None:
+            print(f"[Sync] LLM error, will retry next sync")
+            errors += 1
+            continue
         print(f"[Sync] LLM returned {len(expenses)} expenses: {expenses}")
         if not expenses:
             print(f"[Sync] No expenses parsed, skipping")
@@ -82,7 +90,7 @@ async def sync_telegram_once() -> dict:
         messages_processed += 1
 
     db.set_setting("last_sync_at", datetime.now().isoformat())
-    return {"messages_processed": messages_processed, "expenses_added": expenses_added}
+    return {"messages_processed": messages_processed, "expenses_added": expenses_added, "errors": errors}
 
 
 async def sync_gsheet_once() -> dict:
@@ -103,11 +111,20 @@ async def sync_gsheet_once() -> dict:
 
     db.set_setting("last_sheet_row", str(new_last_row))
 
-    for msg in messages:
+    errors = 0
+    for idx, msg in enumerate(messages):
         if db.is_message_processed(msg["message_id"]):
             continue
+        # Rate-limit: small delay between LLM calls to avoid 429s
+        if idx > 0:
+            await asyncio.sleep(1.0)
         print(f"[GSheet Sync] Processing: {msg['text']}")
         expenses = await llm.parse_expense(msg["text"])
+        if expenses is None:
+            # LLM error — do NOT mark as processed so it retries next sync
+            print(f"[GSheet Sync] LLM error, will retry next sync")
+            errors += 1
+            continue
         print(f"[GSheet Sync] LLM returned {len(expenses)} expenses: {expenses}")
         if not expenses:
             print(f"[GSheet Sync] No expenses parsed, skipping")
@@ -140,7 +157,7 @@ async def sync_gsheet_once() -> dict:
         messages_processed += 1
 
     db.set_setting("last_sync_at", datetime.now().isoformat())
-    return {"messages_processed": messages_processed, "expenses_added": expenses_added}
+    return {"messages_processed": messages_processed, "expenses_added": expenses_added, "errors": errors}
 
 
 @app.on_event("startup")

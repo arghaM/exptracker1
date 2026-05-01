@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import httpx
@@ -65,63 +66,75 @@ def _build_system_prompt() -> str:
     return SYSTEM_PROMPT_TEMPLATE.format(categories=", ".join(categories))
 
 
-async def parse_expense(raw_text: str) -> list[dict]:
+async def parse_expense(raw_text: str, max_retries: int = 4) -> list[dict] | None:
+    """Parse expense text via LLM. Returns list on success, None on error."""
     prompt = f'Message: "{raw_text}"'
     system_prompt = _build_system_prompt()
     if not GROQ_API_KEY:
         print("[LLM] GROQ_API_KEY not set")
-        return []
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                GROQ_URL,
-                headers={
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": GROQ_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "response_format": {"type": "json_object"},
-                    "temperature": 0.1,
-                },
-            )
-            resp.raise_for_status()
-            result = resp.json()
-            text = result["choices"][0]["message"]["content"].strip()
-            parsed = json.loads(text)
-            if isinstance(parsed, dict):
-                for v in parsed.values():
-                    if isinstance(v, list):
-                        parsed = v
-                        break
-                else:
+        return None
+
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(
+                    GROQ_URL,
+                    headers={
+                        "Authorization": f"Bearer {GROQ_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": GROQ_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt},
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "temperature": 0.1,
+                    },
+                )
+                resp.raise_for_status()
+                result = resp.json()
+                text = result["choices"][0]["message"]["content"].strip()
+                parsed = json.loads(text)
+                if isinstance(parsed, dict):
+                    for v in parsed.values():
+                        if isinstance(v, list):
+                            parsed = v
+                            break
+                    else:
+                        parsed = [parsed]
+                if not isinstance(parsed, list):
                     parsed = [parsed]
-            if not isinstance(parsed, list):
-                parsed = [parsed]
-            # Validate each entry
-            valid = []
-            for entry in parsed:
-                if not isinstance(entry, dict):
-                    continue
-                try:
-                    amount = float(entry.get("amount", 0))
-                except (ValueError, TypeError):
-                    continue
-                if amount <= 0:
-                    continue
-                valid.append({
-                    "person": str(entry.get("person", "Unknown")) or "Unknown",
-                    "item": str(entry.get("item", "Unknown")) or "Unknown",
-                    "amount": amount,
-                    "category": str(entry.get("category", "Other")) or "Other",
-                    "notes": str(entry.get("notes", "")) or "",
-                    "account": str(entry.get("account", "")) or "",
-                })
-            return valid
-    except Exception as e:
-        print(f"[LLM] Error parsing expense: {e}")
-        return []
+                # Validate each entry
+                valid = []
+                for entry in parsed:
+                    if not isinstance(entry, dict):
+                        continue
+                    try:
+                        amount = float(entry.get("amount", 0))
+                    except (ValueError, TypeError):
+                        continue
+                    if amount <= 0:
+                        continue
+                    valid.append({
+                        "person": str(entry.get("person", "Unknown")) or "Unknown",
+                        "item": str(entry.get("item", "Unknown")) or "Unknown",
+                        "amount": amount,
+                        "category": str(entry.get("category", "Other")) or "Other",
+                        "notes": str(entry.get("notes", "")) or "",
+                        "account": str(entry.get("account", "")) or "",
+                    })
+                return valid
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429 and attempt < max_retries - 1:
+                wait = 2 ** attempt  # 1s, 2s, 4s
+                print(f"[LLM] Rate limited (429), retrying in {wait}s (attempt {attempt + 1}/{max_retries})")
+                await asyncio.sleep(wait)
+                continue
+            print(f"[LLM] Error parsing expense: {e}")
+            return None
+        except Exception as e:
+            print(f"[LLM] Error parsing expense: {e}")
+            return None
+    return None
