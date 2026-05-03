@@ -748,6 +748,8 @@ async function loadLineChart() {
   const currentData = isCurrentMonth
     ? data.current.map((v, i) => (i + 1) <= todayDay ? v : null)
     : data.current;
+  // Count how many non-null data points exist for current month line
+  const visiblePoints = currentData.filter(v => v !== null).length;
 
   const ctx = document.getElementById('lineChart').getContext('2d');
   if (lineChartInstance) lineChartInstance.destroy();
@@ -763,7 +765,7 @@ async function loadLineChart() {
           borderColor: '#3b82f6',
           backgroundColor: 'rgba(59,130,246,0.08)',
           borderWidth: 2.5,
-          pointRadius: 0,
+          pointRadius: visiblePoints <= 2 ? 4 : 0,
           pointHoverRadius: 5,
           pointHoverBackgroundColor: '#3b82f6',
           fill: true,

@@ -148,6 +148,38 @@
   .nw-cat-amount { font-size: 14px; font-weight: 700; white-space: nowrap; min-width: 80px; text-align: right; }
   .nw-cat-pct { font-size: 11px; color: var(--text-muted); width: 40px; text-align: right; flex-shrink: 0; }
 
+  /* View builder */
+  .view-bar { display: flex; align-items: center; gap: 8px; }
+  .view-select { padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: var(--font); color: var(--text-primary); background: white; cursor: pointer; font-weight: 500; max-width: 180px; }
+  .view-select:focus { outline: none; border-color: var(--blue-500); }
+  .view-build-btn { display: flex; align-items: center; gap: 5px; padding: 7px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-weight: 600; font-family: var(--font); background: white; color: var(--text-secondary); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .view-build-btn:hover { border-color: var(--blue-500); color: var(--blue-600); background: var(--blue-50); }
+  .view-build-btn svg { width: 14px; height: 14px; }
+  .view-delete-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; cursor: pointer; font-size: 12px; color: var(--text-muted); font-family: var(--font); transition: all 0.15s; }
+  .view-delete-btn:hover { color: #ef4444; border-color: #ef4444; background: #fef2f2; }
+
+  .bv-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+  .bv-overlay.active { display: flex; }
+  .bv-modal { background: white; border-radius: 16px; padding: 28px; width: 460px; max-width: 95vw; max-height: 80vh; box-shadow: 0 20px 60px rgba(0,0,0,0.15); display: flex; flex-direction: column; }
+  .bv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .bv-header h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .bv-close { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 20px; padding: 4px; }
+  .bv-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+  .bv-tab { flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 500; font-family: var(--font); background: white; color: var(--text-secondary); cursor: pointer; text-align: center; transition: all 0.15s; }
+  .bv-tab.active { background: var(--blue-600); color: white; border-color: var(--blue-600); }
+  .bv-search { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: var(--font); margin-bottom: 10px; }
+  .bv-search:focus { outline: none; border-color: var(--blue-500); }
+  .bv-list { overflow-y: auto; flex: 1; max-height: 260px; border: 1px solid #f1f5f9; border-radius: 8px; padding: 4px 0; margin-bottom: 14px; }
+  .bv-item { display: flex; align-items: center; gap: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; transition: background 0.1s; }
+  .bv-item:hover { background: #f8fafc; }
+  .bv-item input[type="checkbox"] { accent-color: var(--blue-600); width: 14px; height: 14px; cursor: pointer; }
+  .bv-item label { cursor: pointer; flex: 1; }
+  .bv-name-row { display: flex; gap: 8px; }
+  .bv-name-input { flex: 1; padding: 9px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-family: var(--font); }
+  .bv-name-input:focus { outline: none; border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .bv-save-btn { padding: 9px 20px; background: var(--blue-600); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font); }
+  .bv-save-btn:hover { background: var(--blue-700); }
+
   @media (max-width: 768px) {
     .sidebar { display: none; }
     .main { margin-left: 0; }
@@ -219,6 +251,16 @@
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Export PDF
       </button>
+      <div class="view-bar">
+        <select class="view-select" id="viewSelect" onchange="applyView(this.value)">
+          <option value="">All (Default)</option>
+        </select>
+        <button class="view-delete-btn" id="viewDeleteBtn" onclick="deleteCurrentView()" style="display:none" title="Delete view">&times;</button>
+        <button class="view-build-btn" onclick="openBuildViewModal()">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          Build View
+        </button>
+      </div>
     </div>
   </div>
 
@@ -325,6 +367,26 @@
     </div>
     <div class="nw-modal-total" id="nwModalTotal"></div>
     <div class="nw-cat-list" id="nwModalList"></div>
+  </div>
+</div>
+
+<!-- Build View Modal -->
+<div class="bv-overlay" id="buildViewModal" onclick="if(event.target===this)closeBuildViewModal()">
+  <div class="bv-modal">
+    <div class="bv-header">
+      <h3>Build View</h3>
+      <button class="bv-close" onclick="closeBuildViewModal()">&times;</button>
+    </div>
+    <div class="bv-tabs">
+      <button class="bv-tab active" id="bvTabCat" onclick="switchViewTab('category')">By Categories</button>
+      <button class="bv-tab" id="bvTabTag" onclick="switchViewTab('tag')">By Tags</button>
+    </div>
+    <input type="text" class="bv-search" id="bvSearch" placeholder="Search..." oninput="filterBvItems()">
+    <div class="bv-list" id="bvList"></div>
+    <div class="bv-name-row">
+      <input type="text" class="bv-name-input" id="bvNameInput" placeholder="View name...">
+      <button class="bv-save-btn" onclick="saveView()">Save</button>
+    </div>
   </div>
 </div>
 
@@ -1071,9 +1133,152 @@ async function exportPDF() {
   btn.innerHTML = '<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> Export PDF';
 }
 
+// --- Saved Views ---
+let savedViews = [];
+let bvTabType = 'category';
+let viewsLoaded = false;
+
+async function loadViews() {
+  const resp = await fetch('/report-views');
+  const data = await resp.json();
+  savedViews = data.views || [];
+  const sel = document.getElementById('viewSelect');
+  const currentVal = sel.value;
+  sel.innerHTML = '<option value="">All (Default)</option>' +
+    savedViews.map(v => `<option value="${v.id}">${escH(v.name)} (${v.type === 'category' ? 'Categories' : 'Tags'})</option>`).join('');
+  // Restore selection if still valid
+  if (currentVal && savedViews.some(v => String(v.id) === currentVal)) {
+    sel.value = currentVal;
+  }
+  updateViewDeleteBtn();
+}
+
+function updateViewDeleteBtn() {
+  const sel = document.getElementById('viewSelect');
+  document.getElementById('viewDeleteBtn').style.display = sel.value ? '' : 'none';
+}
+
+function applyView(viewId) {
+  updateViewDeleteBtn();
+  // Clear all filters first
+  selectedCategories = new Set();
+  selectedTags = new Set();
+  selectedAccounts = new Set();
+  clearDropdown('catDropdownList');
+  clearDropdown('tagDropdownList');
+  clearDropdown('accDropdownList');
+
+  if (viewId) {
+    const view = savedViews.find(v => String(v.id) === String(viewId));
+    if (view) {
+      if (view.type === 'category') {
+        view.items.forEach(i => selectedCategories.add(i));
+        // Check the matching checkboxes
+        document.querySelectorAll('#catDropdownList input[type="checkbox"]').forEach(cb => {
+          if (selectedCategories.has(cb.value)) cb.checked = true;
+        });
+      } else {
+        view.items.forEach(i => selectedTags.add(i));
+        document.querySelectorAll('#tagDropdownList input[type="checkbox"]').forEach(cb => {
+          if (selectedTags.has(cb.value)) cb.checked = true;
+        });
+      }
+    }
+  }
+
+  updateChipBtn('catFilterBtn', selectedCategories.size);
+  updateChipBtn('tagFilterBtn', selectedTags.size);
+  updateChipBtn('accFilterBtn', selectedAccounts.size);
+  renderActiveFilters();
+  filterAndRender();
+}
+
+function openBuildViewModal() {
+  bvTabType = 'category';
+  document.getElementById('bvTabCat').classList.add('active');
+  document.getElementById('bvTabTag').classList.remove('active');
+  document.getElementById('bvSearch').value = '';
+  document.getElementById('bvNameInput').value = '';
+  populateBvList();
+  document.getElementById('buildViewModal').classList.add('active');
+  setTimeout(() => document.getElementById('bvSearch').focus(), 50);
+}
+
+function closeBuildViewModal() {
+  document.getElementById('buildViewModal').classList.remove('active');
+}
+
+function switchViewTab(type) {
+  bvTabType = type;
+  document.getElementById('bvTabCat').classList.toggle('active', type === 'category');
+  document.getElementById('bvTabTag').classList.toggle('active', type === 'tag');
+  document.getElementById('bvSearch').value = '';
+  populateBvList();
+}
+
+function populateBvList() {
+  const list = document.getElementById('bvList');
+  if (bvTabType === 'category') {
+    // Use all categories from categoryMeta (always populated after loadReport)
+    const cats = Object.keys(categoryMeta).sort();
+    list.innerHTML = cats.map(c => {
+      const meta = categoryMeta[c] || {};
+      return `<div class="bv-item"><input type="checkbox" value="${escH(c)}"><label>${meta.icon ? meta.icon + ' ' : ''}${escH(c)}</label></div>`;
+    }).join('') || '<div style="padding:16px;color:var(--text-muted);font-size:13px;text-align:center">No categories available</div>';
+  } else {
+    list.innerHTML = allTags.map(t => {
+      return `<div class="bv-item"><input type="checkbox" value="${escH(t.name)}"><label><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${t.color};margin-right:6px;"></span>${escH(t.name)}</label></div>`;
+    }).join('') || '<div style="padding:16px;color:var(--text-muted);font-size:13px;text-align:center">No tags available</div>';
+  }
+}
+
+function filterBvItems() {
+  const q = document.getElementById('bvSearch').value.toLowerCase();
+  document.querySelectorAll('#bvList .bv-item').forEach(item => {
+    const text = item.querySelector('label').textContent.toLowerCase();
+    item.style.display = text.includes(q) ? '' : 'none';
+  });
+}
+
+async function saveView() {
+  const name = document.getElementById('bvNameInput').value.trim();
+  if (!name) { document.getElementById('bvNameInput').focus(); return; }
+
+  const items = [];
+  document.querySelectorAll('#bvList input[type="checkbox"]:checked').forEach(cb => items.push(cb.value));
+  if (!items.length) { alert('Select at least one item.'); return; }
+
+  await fetch('/report-views', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name, type: bvTabType, items })
+  });
+
+  closeBuildViewModal();
+  await loadViews();
+  // Auto-select the newly created view
+  const newest = savedViews[savedViews.length - 1];
+  if (newest) {
+    document.getElementById('viewSelect').value = String(newest.id);
+    applyView(String(newest.id));
+  }
+}
+
+async function deleteCurrentView() {
+  const viewId = document.getElementById('viewSelect').value;
+  if (!viewId) return;
+  const view = savedViews.find(v => String(v.id) === viewId);
+  if (!view || !confirm(`Delete view "${view.name}"?`)) return;
+
+  await fetch(`/report-views/${viewId}`, { method: 'DELETE' });
+  document.getElementById('viewSelect').value = '';
+  applyView('');
+  await loadViews();
+}
+
 // Init
 initDates();
-loadReport();
+loadReport().then(() => loadViews());
 </script>
 </body>
 </html>

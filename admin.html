@@ -273,6 +273,19 @@
   .query-mode-active .cat-row:active, .query-mode-active .group-header:active { cursor: grabbing; }
   .dragging { opacity: 0.4; }
 
+  .month-nav { display: flex; align-items: center; gap: 8px; }
+  .month-nav button { background: none; border: 1px solid var(--border); color: var(--text-secondary); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .month-nav button:hover { background: var(--bg); border-color: var(--text-muted); }
+  .month-nav span { font-size: 13px; font-weight: 500; min-width: 110px; text-align: center; color: var(--text-primary); }
+  .month-nav .custom-btn { width: auto; padding: 0 10px; font-size: 12px; font-weight: 500; font-family: var(--font); }
+  .month-nav .custom-btn.active { background: var(--blue-600); color: white; border-color: var(--blue-600); }
+  .date-range-picker { display: none; align-items: center; gap: 8px; margin-left: 8px; }
+  .date-range-picker.visible { display: flex; }
+  .date-range-picker input[type="date"] { padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: var(--font); }
+  .date-range-picker input[type="date"]:focus { outline: none; border-color: var(--blue-500); }
+  .date-range-picker .apply-btn { padding: 5px 12px; background: var(--blue-600); color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: var(--font); }
+  .date-range-picker .apply-btn:hover { background: var(--blue-700); }
+
   @media (max-width: 900px) {
     .content-split { flex-direction: column; }
     .left-panel { flex: none; max-width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
@@ -304,6 +317,18 @@
 <div class="main">
   <div class="topbar">
     <h2>Categories</h2>
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)">&#8592;</button>
+      <span id="monthLabel"></span>
+      <button onclick="changeMonth(1)">&#8594;</button>
+      <button class="custom-btn" id="customRangeBtn" onclick="toggleCustomRange()">Custom</button>
+      <div class="date-range-picker" id="dateRangePicker">
+        <input type="date" id="customStart">
+        <span style="color:var(--text-muted);font-size:12px">to</span>
+        <input type="date" id="customEnd">
+        <button class="apply-btn" onclick="applyCustomRange()">Apply</button>
+      </div>
+    </div>
     <div style="display:flex;align-items:center;position:relative">
       <button class="query-toggle" id="queryToggleBtn" onclick="toggleQueryMode()">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -501,7 +526,11 @@
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const now = new Date();
-const currentMonthName = MONTH_NAMES[now.getMonth()];
+let currentYear = now.getFullYear();
+let currentMonth = now.getMonth() + 1;
+let customRangeActive = false;
+let customStart = null;
+let customEnd = null;
 const fmt = n => '₹' + Number(n).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const fmtShort = n => '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits: 0});
 
@@ -536,8 +565,83 @@ let editingBudget = false;
 let collapsedGroups = {};
 let lastRegularCategories = [];
 
+// --- Month Navigation ---
+function updateMonthLabel() {
+  document.getElementById('monthLabel').textContent =
+    MONTH_FULL[currentMonth - 1] + ' ' + currentYear;
+}
+
+function getDateRange() {
+  if (customRangeActive && customStart && customEnd) {
+    return { start: customStart, end: customEnd };
+  }
+  const start = `${currentYear}-${String(currentMonth).padStart(2,'0')}-01`;
+  const lastDay = new Date(currentYear, currentMonth, 0).getDate();
+  const end = `${currentYear}-${String(currentMonth).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  return { start, end };
+}
+
+function getSpentLabel() {
+  if (customRangeActive && customStart && customEnd) {
+    const s = new Date(customStart + 'T00:00:00');
+    const e = new Date(customEnd + 'T00:00:00');
+    const fmtDate = d => MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
+    return `spent in ${fmtDate(s)} – ${fmtDate(e)}`;
+  }
+  return `spent in ${MONTH_NAMES[currentMonth - 1]}` +
+    (currentYear !== now.getFullYear() ? ' ' + currentYear : '');
+}
+
+function changeMonth(delta) {
+  if (customRangeActive) resetToMonth();
+  currentMonth += delta;
+  if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+  if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+  updateMonthLabel();
+  loadCategories();
+  if (selectedCategory) selectCategory(selectedCategory);
+}
+
+function toggleCustomRange() {
+  const picker = document.getElementById('dateRangePicker');
+  const btn = document.getElementById('customRangeBtn');
+  if (picker.classList.contains('visible')) {
+    resetToMonth();
+  } else {
+    picker.classList.add('visible');
+    btn.classList.add('active');
+    // Pre-fill with current month range
+    const range = getDateRange();
+    document.getElementById('customStart').value = range.start;
+    document.getElementById('customEnd').value = range.end;
+  }
+}
+
+function applyCustomRange() {
+  const s = document.getElementById('customStart').value;
+  const e = document.getElementById('customEnd').value;
+  if (!s || !e) return;
+  customRangeActive = true;
+  customStart = s;
+  customEnd = e;
+  document.getElementById('monthLabel').textContent = 'Custom Range';
+  loadCategories();
+  if (selectedCategory) selectCategory(selectedCategory);
+}
+
+function resetToMonth() {
+  customRangeActive = false;
+  customStart = null;
+  customEnd = null;
+  document.getElementById('dateRangePicker').classList.remove('visible');
+  document.getElementById('customRangeBtn').classList.remove('active');
+  updateMonthLabel();
+  loadCategories();
+  if (selectedCategory) selectCategory(selectedCategory);
+}
+
 // --- Init ---
-document.getElementById('spentLabel').textContent = `spent in ${currentMonthName}`;
+updateMonthLabel();
 
 function initIconGrid() {
   const grid = document.getElementById('iconGrid');
@@ -608,16 +712,14 @@ function toggleSection(section) {
 
 // --- Load Data ---
 async function loadCategories() {
-  const y = now.getFullYear(), m = now.getMonth() + 1;
-  const start = `${y}-${String(m).padStart(2,'0')}-01`;
-  const lastDay = new Date(y, m, 0).getDate();
-  const end = `${y}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  const { start, end } = getDateRange();
 
   const resp = await fetch(`/categories/spending?start=${start}&end=${end}`);
   const data = await resp.json();
 
   document.getElementById('totalSpent').textContent = fmtShort(data.total_spent);
   document.getElementById('totalBudget').textContent = fmtShort(data.total_budget);
+  document.getElementById('spentLabel').textContent = getSpentLabel();
 
   renderDonut(data.total_spent, data.total_budget);
   lastRegularCategories = data.regular;
@@ -882,6 +984,9 @@ function renderDetail(d, hist, txnGroups) {
   const spent = d.current_month_spent;
   const budget = d.budget;
   currentDetailBudget = budget;
+  // Set chartHistData early so calcAvgSpending() works during render
+  chartHistData = (hist.months || []);
+  chartBudget = hist.budget || 0;
   const left = Math.max(0, budget - spent);
   const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
   let barColor = '#22c55e';
@@ -922,7 +1027,7 @@ function renderDetail(d, hist, txnGroups) {
       </div>
       <div class="detail-spent-row">
         <div>
-          <span class="detail-spent-label" id="detailSpentLabel">Spent in ${currentMonthName}</span>
+          <span class="detail-spent-label" id="detailSpentLabel">${getSpentLabel().replace('spent','Spent')}</span>
           <div class="detail-spent-amount" id="detailSpentAmount">${fmt(spent)}</div>
         </div>
         <div style="text-align:right">
@@ -934,7 +1039,18 @@ function renderDetail(d, hist, txnGroups) {
       <div class="detail-budget-bar">
         <div class="detail-budget-fill" style="width:${pct}%;background:${barColor}"></div>
         <span class="detail-budget-tag">${fmtShort(budget)}</span>
-      </div>` : '<div style="margin-bottom:24px"><span style="font-size:13px;color:var(--text-muted)">No budget set</span></div>'}
+      </div>` : (() => {
+        const avg = calcAvgSpending();
+        const monthsUsed = Math.min(chartHistData.length, 6);
+        return `<div style="margin-bottom:24px">
+          <div class="budget-input-row">
+            <label>Set budget</label>
+            <input type="number" id="autoBudgetInput" value="${avg}" min="0" step="100" placeholder="0">
+            <button class="btn-create" style="padding:8px 14px;font-size:13px" onclick="saveAutoBudget()">Save</button>
+          </div>
+          ${avg > 0 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">Pre-filled with avg of last ${monthsUsed} month${monthsUsed > 1 ? 's' : ''} (${fmtShort(avg)})</div>` : '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">No spending history — enter a budget manually</div>'}
+        </div>`;
+      })()}
       <div class="detail-chart-wrap"><canvas id="detailHistChart"></canvas></div>
       <div class="detail-metrics">
         ${d.yearly_metrics && d.yearly_metrics.length ? `<table class="metrics-table">
@@ -1019,6 +1135,15 @@ function renderDetailChart(hist) {
     categoryPercentage: 0.6,
   }];
 
+  // Compute rolling average: last 6 completed months, exclude current month
+  const nowKey2 = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const pastMonths = months.filter(m => m.month < nowKey2);
+  const avgMonths = pastMonths.slice(-6);
+  const chartAvg = avgMonths.length >= 1
+    ? Math.round(avgMonths.reduce((s, m) => s + (m.spent || 0), 0) / avgMonths.length)
+    : 0;
+  const chartAvgCount = avgMonths.length;
+
   // Budget line plugin
   const budgetLinePlugin = {
     id: 'budgetLine',
@@ -1046,6 +1171,80 @@ function renderDetailChart(hist) {
       ctx.restore();
     }
   };
+
+  // Average line plugin (orange dotted)
+  const avgLinePlugin = {
+    id: 'avgLine',
+    _hovered: false,
+    _tooltipPos: null,
+    afterDraw(chart) {
+      if (chartAvg <= 0) return;
+      const { ctx, chartArea: { left, right, top, bottom }, scales: { y } } = chart;
+      const yPos = y.getPixelForValue(chartAvg);
+      if (yPos < top || yPos > bottom) return;
+      ctx.save();
+      ctx.beginPath();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.5;
+      ctx.moveTo(left, yPos);
+      ctx.lineTo(right, yPos);
+      ctx.stroke();
+      // Label on left
+      ctx.setLineDash([]);
+      ctx.font = '600 10px Inter, sans-serif';
+      ctx.fillStyle = '#f59e0b';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('avg ' + fmtShort(chartAvg), left, yPos - 4);
+      ctx.restore();
+    },
+    afterEvent(chart, args) {
+      if (chartAvg <= 0) return;
+      const { event } = args;
+      const { chartArea: { left, right }, scales: { y } } = chart;
+      const yPos = y.getPixelForValue(chartAvg);
+      const isNear = event.x >= left && event.x <= right && Math.abs(event.y - yPos) < 10;
+      if (isNear !== this._hovered) {
+        this._hovered = isNear;
+        this._tooltipPos = isNear ? { x: event.x, y: yPos } : null;
+        chart.draw();
+      }
+    },
+    afterDatasetsDraw(chart) {
+      if (!this._hovered || !this._tooltipPos || chartAvg <= 0) return;
+      const { ctx } = chart;
+      const text = `Avg of last ${chartAvgCount} month${chartAvgCount > 1 ? 's' : ''}: ${fmt(chartAvg)}`;
+      ctx.save();
+      ctx.font = '500 12px Inter, sans-serif';
+      const metrics = ctx.measureText(text);
+      const pad = 8;
+      const tw = metrics.width + pad * 2;
+      const th = 28;
+      let tx = this._tooltipPos.x - tw / 2;
+      // Clamp to chart area
+      const { left, right } = chart.chartArea;
+      if (tx < left) tx = left;
+      if (tx + tw > right) tx = right - tw;
+      const ty = this._tooltipPos.y - th - 8;
+      // Background
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.roundRect(tx, ty, tw, th, 6);
+      ctx.fill();
+      // Text
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, tx + pad, ty + th / 2);
+      ctx.restore();
+    }
+  };
+
+  // Ensure y-axis covers both budget and avg lines
+  let suggestedMax = undefined;
+  const lineMax = Math.max(chartBudget, chartAvg);
+  if (lineMax > 0) suggestedMax = lineMax * 1.3;
 
   detailChart = new Chart(canvas, {
     type: 'bar',
@@ -1095,11 +1294,11 @@ function renderDetailChart(hist) {
           grid: { color: '#f3f4f6', drawBorder: false },
           ticks: { font: { size: 10 }, color: '#94a3b8', callback: v => fmtShort(v) },
           beginAtZero: true,
-          suggestedMax: chartBudget > 0 ? chartBudget * 1.3 : undefined,
+          suggestedMax,
         }
       }
     },
-    plugins: [budgetLinePlugin]
+    plugins: [budgetLinePlugin, ...(chartAvg > 0 ? [avgLinePlugin] : [])]
   });
 }
 
@@ -1127,18 +1326,41 @@ function onBarClick(idx) {
 }
 
 // --- Budget Editing ---
+function calcAvgSpending() {
+  // Use up to last 6 completed months, excluding the current (incomplete) month
+  const nowKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const past = chartHistData.filter(m => m.month < nowKey);
+  if (!past.length) return 0;
+  const recent = past.slice(-6);
+  const total = recent.reduce((s, m) => s + (m.spent || 0), 0);
+  return Math.round(total / recent.length);
+}
+
 function startEditBudget() {
   editingBudget = true;
   const btn = document.getElementById('editBudgetBtn');
   btn.outerHTML = `
     <button class="btn-cancel-budget" onclick="cancelEditBudget()">Cancel</button>
     <button class="btn-save-budget" onclick="saveBudget()">Save budget</button>`;
+  const suggestedBudget = currentDetailBudget || calcAvgSpending();
+  const avg = calcAvgSpending();
+  const nowKeyEdit = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const monthsUsed = Math.min(chartHistData.filter(m => m.month < nowKeyEdit).length, 6);
   const area = document.getElementById('budgetEditArea');
-  area.innerHTML = `
+  let html = `
     <div class="budget-input-row">
       <label>Budget for all months</label>
-      <input type="number" id="budgetInput" value="${currentDetailBudget}" min="0" step="100" placeholder="0">
+      <input type="number" id="budgetInput" value="${suggestedBudget}" min="0" step="100" placeholder="0">
     </div>`;
+  if (avg > 0) {
+    html += `<div style="font-size:12px;color:var(--text-muted);margin-top:-10px;margin-bottom:12px">
+      Avg spending (last ${monthsUsed} month${monthsUsed > 1 ? 's' : ''}): ${fmtShort(avg)}`;
+    if (currentDetailBudget !== avg) {
+      html += ` <button onclick="document.getElementById('budgetInput').value=${avg}" style="background:none;border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;margin-left:6px;font-family:var(--font);color:var(--blue-600)">Use avg</button>`;
+    }
+    html += `</div>`;
+  }
+  area.innerHTML = html;
   document.getElementById('budgetInput').focus();
 }
 
@@ -1148,6 +1370,18 @@ function cancelEditBudget() {
 
 async function saveBudget() {
   const amount = parseFloat(document.getElementById('budgetInput').value) || 0;
+  await fetch(`/categories/${encodeURIComponent(selectedCategory)}/budget`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({amount})
+  });
+  await loadCategories();
+  selectCategory(selectedCategory);
+}
+
+async function saveAutoBudget() {
+  const amount = parseFloat(document.getElementById('autoBudgetInput').value) || 0;
+  if (amount <= 0) return;
   await fetch(`/categories/${encodeURIComponent(selectedCategory)}/budget`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},

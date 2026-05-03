@@ -952,3 +952,38 @@ def tag_transactions(
     end: str = Query(..., description="End date YYYY-MM-DD"),
 ):
     return db.get_expenses_by_tag(tag_id, start, end)
+
+
+# --- Report Views ---
+
+class ReportViewCreate(BaseModel):
+    name: str
+    type: str  # "category" or "tag"
+    items: list[str]
+
+
+@app.get("/report-views")
+def list_report_views():
+    import json
+    raw = db.get_setting("report_views", "[]")
+    return {"views": json.loads(raw)}
+
+
+@app.post("/report-views")
+def create_report_view(body: ReportViewCreate):
+    import json
+    raw = db.get_setting("report_views", "[]")
+    views = json.loads(raw)
+    new_id = max((v["id"] for v in views), default=0) + 1
+    views.append({"id": new_id, "name": body.name, "type": body.type, "items": body.items})
+    db.set_setting("report_views", json.dumps(views))
+    return {"status": "created", "id": new_id}
+
+
+@app.delete("/report-views/{view_id}")
+def delete_report_view(view_id: int):
+    import json
+    raw = db.get_setting("report_views", "[]")
+    views = [v for v in json.loads(raw) if v["id"] != view_id]
+    db.set_setting("report_views", json.dumps(views))
+    return {"status": "deleted", "id": view_id}
